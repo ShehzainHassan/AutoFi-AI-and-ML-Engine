@@ -7,11 +7,8 @@ from sklearn.decomposition import TruncatedSVD
 from scipy.sparse import csr_matrix
 import numpy as np
 import warnings
-import joblib
-import os
 
-MODEL_DIR = "trained_models"
-
+from app.models import recommendation_model
 
 class RecommendationService:
     def __init__(self, vehicle_limit=10000):
@@ -84,11 +81,9 @@ class RecommendationService:
     def train_content_based_model(self, features_df):
         self.vehicle_ids = features_df["Id"].values
 
-        # Drop columns not used in ML
         columns_to_drop = ["Id", "Vin"]
         feature_matrix = features_df.drop(columns=columns_to_drop).values
 
-        # Calculate cosine similarity
         self.similarity_matrix = cosine_similarity(feature_matrix)
 
     def get_similar_vehicles(self, vehicle_id, n=5):
@@ -110,18 +105,14 @@ class RecommendationService:
         return similar_vehicle_ids.tolist()
 
     def train_collaborative_model(self, interactions_df):
-        # Create user-vehicle interaction matrix
         interaction_matrix = interactions_df.pivot_table(
             index='user_id',
             columns='vehicle_id',
             values='count', 
             fill_value=0
         )
-
-        # Convert to sparse matrix
         sparse_matrix = csr_matrix(interaction_matrix.values)
 
-        # Train collaborative model (SVD)
         n_features = sparse_matrix.shape[1]
         n_components = min(50, n_features - 1)
         svd = TruncatedSVD(n_components=n_components)
@@ -137,7 +128,6 @@ class RecommendationService:
     def get_hybrid_recommendations(self, user_id, models, top_n=10):
         content_model, collaborative_model, interaction_matrix = models
 
-        # Step 1 - get user's interaction history
         query = """
             SELECT "VehicleId" AS vehicle_id, COUNT(*) AS weight
             FROM "UserInteractions"
@@ -154,19 +144,16 @@ class RecommendationService:
 
         user_interactions = pd.DataFrame(rows)
 
-        # Step 2 - content-based scores
         content_scores = {}
         for _, row in user_interactions.iterrows():
             vehicle_id = row['vehicle_id']
             weight = row['weight']
 
             similar_ids = content_model.get_similar_vehicles(vehicle_id, n=top_n * 5)
-            
             for rank, similar_id in enumerate(similar_ids):
-                score = weight * (1.0 / (rank + 1)) 
+                score = weight * (1.0 / (rank + 1))
                 content_scores[similar_id] = content_scores.get(similar_id, 0.0) + score
 
-        # Step 3 - collaborative scores
         collaborative_scores = {}
         if user_id in interaction_matrix.index:
             user_index = interaction_matrix.index.get_loc(user_id)
@@ -178,57 +165,31 @@ class RecommendationService:
             for i, v_id in enumerate(vehicle_ids):
                 collaborative_scores[v_id] = scores[i]
 
-        # Step 4 - Combine scores
         hybrid_scores = {}
         for v_id in set(content_scores.keys()).union(collaborative_scores.keys()):
             content_score = content_scores.get(v_id, 0.0)
             collaborative_score = collaborative_scores.get(v_id, 0.0)
-            
+
             alpha = 0.5
             hybrid_score = alpha * content_score + (1 - alpha) * collaborative_score
             hybrid_scores[v_id] = hybrid_score
 
-        # Step 5 - Sort and return top-N
         ranked = sorted(hybrid_scores.items(), key=lambda x: x[1], reverse=True)
         recommendations = [int(v_id) for v_id, _ in ranked[:top_n]]
 
         return recommendations
 
     def train_models(self):
-        # Step 1: Prepare data
         interactions_df, features_df = self.prepare_data_for_ml()
-
-        # Step 2: Train Content-Based Model
         self.train_content_based_model(features_df)
-
-        # Step 3: Train Collaborative Model
         collaborative_model = self.train_collaborative_model(interactions_df)
-
         return collaborative_model
 
     def save_models(self, collaborative_model):
-            os.makedirs(MODEL_DIR, exist_ok=True)
-
-            joblib.dump(collaborative_model[0], f'{MODEL_DIR}/collaborative_model.pkl')
-            joblib.dump(collaborative_model[1], f'{MODEL_DIR}/user_features.npy')
-            joblib.dump(collaborative_model[2], f'{MODEL_DIR}/vehicle_features.npy')
-            joblib.dump(collaborative_model[3], f'{MODEL_DIR}/interaction_matrix.pkl')
-
-            joblib.dump(self.similarity_matrix, f'{MODEL_DIR}/similarity_matrix.npy')
-            joblib.dump(self.vehicle_ids, f'{MODEL_DIR}/vehicle_ids.npy')
+        recommendation_model.save_collaborative_model(collaborative_model)
+        recommendation_model.save_content_model(self.similarity_matrix, self.vehicle_ids)
 
     def load_models(self):
-        if not os.path.exists(f'{MODEL_DIR}/collaborative_model.pkl'):
-            return None
-
-        collaborative_model = (
-            joblib.load(f'{MODEL_DIR}/collaborative_model.pkl'),
-            joblib.load(f'{MODEL_DIR}/user_features.npy'),
-            joblib.load(f'{MODEL_DIR}/vehicle_features.npy'),
-            joblib.load(f'{MODEL_DIR}/interaction_matrix.pkl'),
-        )
-
-        self.similarity_matrix = joblib.load(f'{MODEL_DIR}/similarity_matrix.npy')
-        self.vehicle_ids = joblib.load(f'{MODEL_DIR}/vehicle_ids.npy')
-
+        collaborative_model = recommendation_model.load_collaborative_model()
+        self.similarity_matrix, self.vehicle_ids = recommendation_model.load_content_model()
         return collaborative_model

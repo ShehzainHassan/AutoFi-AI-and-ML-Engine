@@ -1,3 +1,4 @@
 .env
 trained_models/
 venv/
+**/__pycache__/

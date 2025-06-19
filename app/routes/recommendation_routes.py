@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.services.recommendation_service import RecommendationService
-from app.models.recommendation_model import UserRecommendationsResponse  
-from app.models.recommendation_model import SimilarVehiclesResponse  
+from app.schemas.schemas import UserRecommendationsResponse  
+from app.schemas.schemas import SimilarVehiclesResponse  
 
 router = APIRouter()
 recommendation_service = RecommendationService()
