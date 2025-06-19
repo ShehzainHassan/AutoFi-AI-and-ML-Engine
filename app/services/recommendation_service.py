@@ -7,6 +7,10 @@ from sklearn.decomposition import TruncatedSVD
 from scipy.sparse import csr_matrix
 import numpy as np
 import warnings
+import joblib
+import os
+
+MODEL_DIR = "trained_models"
 
 
 class RecommendationService:
@@ -88,8 +92,7 @@ class RecommendationService:
         self.similarity_matrix = cosine_similarity(feature_matrix)
 
     def get_similar_vehicles(self, vehicle_id, n=5):
-        if not hasattr(self, 'similarity_matrix') or not hasattr(self, 'vehicle_ids'):
-            print("Training content-based model...")
+        if self.similarity_matrix is None or self.vehicle_ids is None:
             _, features_df = self.prepare_data_for_ml()
             self.train_content_based_model(features_df)
 
@@ -129,10 +132,7 @@ class RecommendationService:
 
         vehicle_features = svd.components_.T
 
-        # Save model components
-        model = svd
-
-        return model, user_features, vehicle_features, interaction_matrix
+        return svd, user_features, vehicle_features, interaction_matrix
 
     def get_hybrid_recommendations(self, user_id, models, top_n=10):
         content_model, collaborative_model, interaction_matrix = models
@@ -149,8 +149,7 @@ class RecommendationService:
             rows = cur.fetchall()
 
         if not rows:
-            print(f"No interactions for user_id={user_id}. Returning popular vehicles.")
-            # fallback: return popular or random
+            print(f"No interactions for user_id={user_id}")
             return []
 
         user_interactions = pd.DataFrame(rows)
@@ -164,7 +163,7 @@ class RecommendationService:
             similar_ids = content_model.get_similar_vehicles(vehicle_id, n=top_n * 5)
             
             for rank, similar_id in enumerate(similar_ids):
-                score = weight * (1.0 / (rank + 1))  # higher score for higher-ranked similarities
+                score = weight * (1.0 / (rank + 1)) 
                 content_scores[similar_id] = content_scores.get(similar_id, 0.0) + score
 
         # Step 3 - collaborative scores
@@ -196,44 +195,40 @@ class RecommendationService:
         return recommendations
 
     def train_models(self):
-        print("\n=== Starting full training pipeline ===")
-
         # Step 1: Prepare data
         interactions_df, features_df = self.prepare_data_for_ml()
 
-        print("\nInteractions Summary:")
-        print(interactions_df.head())
-
-        print("\nProcessed Vehicle Features for ML:")
-        print(features_df.head())
-
         # Step 2: Train Content-Based Model
         self.train_content_based_model(features_df)
-        print("\nContent-based model trained!")
 
         # Step 3: Train Collaborative Model
         collaborative_model = self.train_collaborative_model(interactions_df)
-        print("\nCollaborative model trained!")
 
-        print("\n=== Training pipeline complete ===")
         return collaborative_model
 
-if __name__ == "__main__":
-    service = RecommendationService(vehicle_limit=10000)
+    def save_models(self, collaborative_model):
+            os.makedirs(MODEL_DIR, exist_ok=True)
 
-    # Run full training pipeline
-    collaborative_model = service.train_models()
+            joblib.dump(collaborative_model[0], f'{MODEL_DIR}/collaborative_model.pkl')
+            joblib.dump(collaborative_model[1], f'{MODEL_DIR}/user_features.npy')
+            joblib.dump(collaborative_model[2], f'{MODEL_DIR}/vehicle_features.npy')
+            joblib.dump(collaborative_model[3], f'{MODEL_DIR}/interaction_matrix.pkl')
 
-    # Content-based recommendations
-    vehicle_id = 10
-    similar_vehicles = service.get_similar_vehicles(vehicle_id, n=5)
-    print(f"\nTop 5 similar vehicles to vehicle_id={vehicle_id} (Content-Based): {similar_vehicles}")
+            joblib.dump(self.similarity_matrix, f'{MODEL_DIR}/similarity_matrix.npy')
+            joblib.dump(self.vehicle_ids, f'{MODEL_DIR}/vehicle_ids.npy')
 
-    # Hybrid recommendations
-    user_id = 15
-    models = (service, collaborative_model, collaborative_model[3])  # passing interaction_matrix
-    hybrid_recommendations = service.get_hybrid_recommendations(user_id, models, top_n=5)
-    print(f"\nTop 5 hybrid recommendations for user_id={user_id}: {hybrid_recommendations}")
+    def load_models(self):
+        if not os.path.exists(f'{MODEL_DIR}/collaborative_model.pkl'):
+            return None
 
-    # Close DB connection
-    service.close()
+        collaborative_model = (
+            joblib.load(f'{MODEL_DIR}/collaborative_model.pkl'),
+            joblib.load(f'{MODEL_DIR}/user_features.npy'),
+            joblib.load(f'{MODEL_DIR}/vehicle_features.npy'),
+            joblib.load(f'{MODEL_DIR}/interaction_matrix.pkl'),
+        )
+
+        self.similarity_matrix = joblib.load(f'{MODEL_DIR}/similarity_matrix.npy')
+        self.vehicle_ids = joblib.load(f'{MODEL_DIR}/vehicle_ids.npy')
+
+        return collaborative_model
