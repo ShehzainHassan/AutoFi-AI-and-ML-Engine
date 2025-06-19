@@ -1,8 +1,3 @@
 .env
-__pycache__/
-**/__pycache__/
-*.pyc
-.pytest_cache/
 trained_models/
 venv/
-app/__pycache__/
