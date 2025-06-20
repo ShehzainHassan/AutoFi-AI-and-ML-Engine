@@ -178,7 +178,7 @@ class RecommendationService:
         top_k_similar = {}
 
         for i, v_id in enumerate(vehicle_ids):
-            sim_scores = similarity_matrix[i]
+            sim_scores = similarity_matrix[i]               
 
             top_indices = np.argsort(sim_scores)[::-1]
             top_indices = top_indices[top_indices != i][:top_k]
@@ -250,7 +250,7 @@ class RecommendationService:
         if self.user_similarity_topk is None:
             self.train_user_similarity_model()
 
-        svd, user_features, vehicle_features, interaction_matrix = self.collaborative_model
+        _, user_features, vehicle_features, interaction_matrix = self.collaborative_model
 
         query = """
             SELECT "VehicleId" AS vehicle_id, COUNT(*) AS weight
