@@ -1,22 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-
-from app.services.recommendation_service import RecommendationService
 from .routes import recommendation_routes
+from app.services.recommendation_service import RecommendationService
 
-recommendation_service = RecommendationService()
+recommendation_service = RecommendationService(vehicle_limit=20000)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("Loading models")
-    recommendation_service.load_models()
-
-    print("Models loaded.")
-    yield
-
-
-app = FastAPI(title="Vehicle Recommendation API", lifespan=lifespan)
+app = FastAPI(title="Vehicle Recommendation API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,8 +15,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+recommendation_routes.recommendation_service = recommendation_service
 app.include_router(recommendation_routes.router)
 
 @app.get("/")
 async def root():
     return {"message": "Vehicle Recommendation API is running."}
+    
