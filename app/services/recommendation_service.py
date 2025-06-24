@@ -346,11 +346,11 @@ class RecommendationService:
         return similar_vehicles
 
     def save_models(self):
-        print("[SAVE MODELS] Saving all trained models...")
+        print("[SAVE] Saving all trained models...")
         recommendation_model.save_collaborative_model(self.collaborative_model)
         recommendation_model.save_content_model(self.vehicle_similarity_topk)
         recommendation_model.save_user_content_model(self.user_similarity_topk)
-        print("[SAVE MODELS] All models saved successfully.")
+        print("[SAVE] All models saved successfully.")
 
     def load_models(self):
         need_save = False
