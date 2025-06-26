@@ -19,14 +19,14 @@ class RecommendationService:
         "Horsepower": 5.0, "TorqueFtLbs": 5.0, "EngineSize": 4.5, "ZeroTo60MPH": 4.5,
         "DrivetrainType": 4.0, "CO2Emissions": 3.5, "Transmission": 3.5, "Price": 3.0,
         "Model": 2.5, "Make": 2.0, "Year": 1.5, "Color": 1.5, "FuelType": 1.0, 
-        "CityMPG": 0.8, "Mileage": 0.5, "Status": 0.5, "OptionsCount": 0.3
+        "CityMPG": 0.8, "Mileage": 0.5, "Status": 0.5
     }
 
     feature_weights_user = {
         "Price": 5.0, "FuelType": 4.5, "DrivetrainType": 4.25, "CO2Emissions": 4.0, "CityMPG": 4.0,
         "Horsepower": 3.5, "TorqueFtLbs": 3.5, "EngineSize": 3.0, "Color": 2.5,
         "Transmission": 2.5, "Mileage": 2.0, "ZeroTo60MPH": 1.5, "Status": 1.5, "Model": 1.0,
-        "Make": 1.0, "Year": 0.8, "OptionsCount": 0.3
+        "Make": 1.0, "Year": 0.8
     }
 
     interaction_weights = {
