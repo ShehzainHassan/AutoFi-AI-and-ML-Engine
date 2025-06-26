@@ -110,7 +110,6 @@ class RecommendationService:
         df['EngineSize'] = None
         df['ZeroTo60MPH'] = None
         df['DrivetrainType'] = None
-        df['OptionsCount'] = 0
 
         for i, row in df.iterrows():
             key = (row.get('Make'), row.get('Model'), row.get('Year'))
@@ -130,7 +129,6 @@ class RecommendationService:
                 df.at[i, 'EngineSize'] = engine.get('size')
                 df.at[i, 'ZeroTo60MPH'] = performance.get('ZeroTo60MPH')
                 df.at[i, 'DrivetrainType'] = drivetrain.get('type')
-                df.at[i, 'OptionsCount'] = len(options) if isinstance(options, list) else 0
 
         conn.close()
         return df
@@ -154,7 +152,7 @@ class RecommendationService:
             features_df['EngineSize'] = features_df['EngineSize'].astype(str).str.replace('L', '', regex=False)
             features_df['EngineSize'] = pd.to_numeric(features_df['EngineSize'], errors='coerce')
 
-        num_columns = ['Year', 'Price', 'Mileage', 'CO2Emissions', 'CityMPG', 'Horsepower', 'TorqueFtLbs', 'EngineSize', 'ZeroTo60MPH', 'OptionsCount']
+        num_columns = ['Year', 'Price', 'Mileage', 'CO2Emissions', 'CityMPG', 'Horsepower', 'TorqueFtLbs', 'EngineSize', 'ZeroTo60MPH']
         for col in num_columns:
             scaler = StandardScaler()
             features_df[col] = pd.to_numeric(features_df[col], errors='coerce')
@@ -400,5 +398,4 @@ class RecommendationService:
             "EngineSize": str(row.get("EngineSize", "")),
             "ZeroTo60MPH": str(row.get("ZeroTo60MPH", "")),
             "DrivetrainType": str(row.get("DrivetrainType", "")),
-            "OptionsCount": str(row.get("OptionsCount", ""))
         }
