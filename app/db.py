@@ -1,36 +1,27 @@
-import psycopg2
-from psycopg2.extras import RealDictCursor
-import os
-from dotenv import load_dotenv
-import logging
+from contextlib import asynccontextmanager
+import asyncpg
+from config.app_config import settings
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+class DatabaseManager:
+    def __init__(self):
+        self.pool: asyncpg.Pool | None = None
 
-load_dotenv()
-
-def get_db_connection():
-    try:
-        # First try to use DATABASE_URL (Railway's standard format)
-        database_url = os.getenv("DATABASE_URL")
-        
-        if database_url:
-            conn = psycopg2.connect(database_url)
-            logger.info("Connected to database using DATABASE_URL")
-            return conn
-        
-        # Fallback to individual connection parameters
-        conn = psycopg2.connect(
-            host=os.getenv("DB_HOST", "localhost"),
-            database=os.getenv("DB_NAME", "autofi"),
-            user=os.getenv("DB_USER", "user"),
-            password=os.getenv("DB_PASSWORD", "pass"),
-            port=os.getenv("DB_PORT", "5432")
+    async def initialize(self):
+        self.pool = await asyncpg.create_pool(
+            dsn=settings.DATABASE_URL,
+            min_size=settings.DB_POOL_MIN,
+            max_size=settings.DB_POOL_MAX,
+            command_timeout=60,
         )
-        logger.info("Connected to database using individual parameters")
-        return conn
-    
-    except Exception as e:
-        logger.error(f"Failed to connect to database: {e}")
-        raise
+
+    async def close(self):
+        if self.pool:
+            await self.pool.close()
+            self.pool = None
+
+    @asynccontextmanager
+    async def get_connection(self):
+        if not self.pool:
+            raise RuntimeError("Database pool not initialized")
+        async with self.pool.acquire() as conn:
+            yield conn

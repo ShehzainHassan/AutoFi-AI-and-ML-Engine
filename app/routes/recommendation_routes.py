@@ -1,59 +1,72 @@
-from fastapi import APIRouter, HTTPException
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Path, Request
+from app.middleware.rate_limit_middleware import limiter
 from app.schemas.schemas import RecommendationResponse, SimilarVehiclesResponse
-from typing import Optional
+from app.interfaces.recommendation_interfaces import IRecommendationOrchestrator
+from app.exceptions.recommendation_exceptions import (
+    UserNotFoundError,
+    RecommendationServiceError,
+    InsufficientDataError,
+    ModelNotAvailableError,
+    VehicleNotFoundError,
+)
+from app.security.auth_middleware import AuthService
+from config.app_config import settings
+import logging
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
-recommendation_service: Optional[object] = None  # Will be set during startup
+auth_service = AuthService(jwt_secret=settings.JWT_SECRET, jwt_algorithm=settings.JWT_ALGORITHM)
 
-@router.get('/api/recommendations/user/{user_id}', response_model=RecommendationResponse)
-async def get_recommendations(user_id: int):
-    """
-    Returns top N hybrid recommendations for a given user_id
-    """
-    if recommendation_service is None:
-        raise HTTPException(status_code=503, detail="Recommendation service not available. Please check database connection.")
-    
+def get_orchestrator(request: Request) -> IRecommendationOrchestrator:
+    return request.app.state.container.orchestrator
+
+
+@router.get("/user/{user_id}", response_model=RecommendationResponse)
+@limiter.limit("10/minute")
+async def get_recommendations(
+    request: Request,
+    user_id: int = Path(..., ge=1, le=2147483647),
+    top_n: int = Query(default=5, ge=1, le=50),
+    current_user: dict = Depends(auth_service.verify_token),
+    orchestrator: IRecommendationOrchestrator = Depends(get_orchestrator),
+):
+    if current_user.get("user_id") != user_id and not current_user.get("is_admin", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot access other user's recommendations",
+        )
+
     try:
-        recommendations = recommendation_service.get_hybrid_recommendations(user_id, top_n=5)
-        return recommendations
+        return await orchestrator.get_recommendations(user_id, top_n)
+    except UserNotFoundError:
+        raise HTTPException(status_code=404, detail="User not found")
+    except InsufficientDataError as e:
+        raise HTTPException(status_code=422, detail=e.message)
+    except ModelNotAvailableError as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except RecommendationServiceError as e:
+        logger.error(f"Recommendation service error for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get('/api/recommendations/similar/{vehicle_id}', response_model=SimilarVehiclesResponse)
-async def get_similar_vehicles(vehicle_id: int, top_n: int = 5):
-    """
-    Returns top N similar vehicles based on content-based model
-    """
-    if recommendation_service is None:
-        raise HTTPException(status_code=503, detail="Recommendation service not available. Please check database connection.")
-    
+@router.get("/similar/{vehicle_id}", response_model=SimilarVehiclesResponse)
+@limiter.limit("10/minute")
+async def get_similar_vehicles(
+    request: Request,
+    vehicle_id: int,
+    top_n: int = Query(default=5, ge=1, le=50),
+    orchestrator: IRecommendationOrchestrator = Depends(get_orchestrator),
+):
     try:
-        similar_vehicles = recommendation_service.get_similar_vehicles(vehicle_id, top_n)
-
-        return SimilarVehiclesResponse(vehicle_id=vehicle_id,similar_vehicles=similar_vehicles)
-
+        return await orchestrator.get_similar_vehicles(vehicle_id, top_n)
+    except VehicleNotFoundError:
+        raise HTTPException(status_code=404, detail="Vehicle not found")
+    except ModelNotAvailableError as e:
+        raise HTTPException(status_code=503, detail=e.message)
+    except RecommendationServiceError as e:
+        logger.error(f"Recommendation error for vehicle {vehicle_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get('/api/recommendations/interactions-summary')
-def get_interactions_summary():
-    if recommendation_service is None:
-        raise HTTPException(status_code=503, detail="Recommendation service not available. Please check database connection.")
-    
-    try:
-        df = recommendation_service.load_interactions_summary()
-        return df.to_dict(orient="records")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get('/api/recommendations/vehicle-features')
-def get_vehicle_features():
-    if recommendation_service is None:
-        raise HTTPException(status_code=503, detail="Recommendation service not available. Please check database connection.")
-    
-    try:
-        df = recommendation_service.load_vehicle_features()
-        return df.to_dict(orient="records")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(f"Unhandled error in similar vehicles endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Unexpected error occurred")

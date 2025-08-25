@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
+from datetime import datetime
 
 class VehicleRecommendation(BaseModel):
     vehicle_id: int
@@ -18,3 +19,15 @@ class SimilarVehicle(BaseModel):
 class SimilarVehiclesResponse(BaseModel):
     vehicle_id: int
     similar_vehicles: List[SimilarVehicle]
+    source: str
+
+class ErrorDetail(BaseModel):
+    code: str
+    message: str
+    field: Optional[str] = None
+
+class ErrorResponse(BaseModel):
+    error: ErrorDetail
+    request_id: str
+    timestamp: datetime
+

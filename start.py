@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 """
 Railway deployment startup script for AutoFi Vehicle Recommendation System
 """
 import os
 import uvicorn
-from config import settings
+from config.app_config import settings
 
 def main():
     """Start the FastAPI application with Railway-optimized settings"""
