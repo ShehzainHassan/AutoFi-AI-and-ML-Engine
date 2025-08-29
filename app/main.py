@@ -1,4 +1,3 @@
-# app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -10,6 +9,7 @@ from redis.asyncio import Redis
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+import simplejson as json
 
 from app.db import DatabaseManager
 from app.repositories.vehicle_repository import VehicleRepository
@@ -24,6 +24,7 @@ from config.app_config import settings
 from .routes import recommendation_routes
 from app.services.model_serving_service import ModelServingService
 from app.strategies.recommendation_strategies import RecommendationStrategyFactory, RecommendationStrategy
+from app.routes import ai_assistant_routes, recommendation_routes
 
 APP_VERSION = "1.0.0"
 MAX_RETRIES = 5
@@ -33,8 +34,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 db_manager = DatabaseManager()
-
 container: DependencyContainer | None = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global container
+    start_time = time.time()
+    logger.info("Starting AutoFi Vehicle Recommendation API...")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -54,110 +60,103 @@ async def lifespan(app: FastAPI):
                     logger.error(f"[{name}] All retries failed.")
                     raise
 
-    async def init_recommendation_system():
-        try:
-            # DB
-            await retry_async(db_manager.initialize, "Database Init")
-            pool = db_manager.pool
+    try:
+        await retry_async(db_manager.initialize, "Database Init")
+        pool = db_manager.pool
 
-            # Redis
-            redis_client = Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                decode_responses=True
-            )
-            await retry_async(redis_client.ping, "Redis Ping")
+        redis_client = Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            db=settings.REDIS_DB,
+            decode_responses=True
+        )
+        await retry_async(redis_client.ping, "Redis Ping")
 
-            # Repositories
-            vehicle_repo = VehicleRepository(pool=pool, vehicle_limit=20000)
-            user_repo = UserRepository(pool=pool)
+        vehicle_repo = VehicleRepository(pool=pool, vehicle_limit=20000)
+        user_repo = UserRepository(pool=pool)
 
-            # Load Vehicle Features in background
-            asyncio.create_task(vehicle_repo.load_vehicle_features())
+        # Load vehicle features in background
+        asyncio.create_task(vehicle_repo.load_vehicle_features())
 
-            # Services
-            ml_config = MLConfig()
-            model_serving = ModelServingService(max_workers=4)
-            caching_service = CachingService(redis_client=redis_client)
+        ml_config = MLConfig()
+        model_serving = ModelServingService(max_workers=4)
+        caching_service = CachingService(redis_client=redis_client)
+        ml_service = MLModelService(
+            user_repo=user_repo,
+            vehicle_repo=vehicle_repo,
+            model_serving=model_serving,
+            config=ml_config
+        )
 
-            ml_service = MLModelService(
-                user_repo=user_repo,
-                vehicle_repo=vehicle_repo,
-                model_serving=model_serving,
-                config=ml_config
-            )
+        strategy_factory = RecommendationStrategyFactory(None)
 
-            strategy_factory = RecommendationStrategyFactory(None)  
+        orchestrator = RecommendationOrchestrator(
+            vehicle_repository=vehicle_repo,
+            user_repository=user_repo,
+            caching_service=caching_service,
+            strategy_factory=strategy_factory,
+            ml_service=ml_service,
+            logger=logger,
+            default_strategy=RecommendationStrategy.HYBRID
+        )
 
-            orchestrator = RecommendationOrchestrator(
-                vehicle_repository=vehicle_repo,
-                user_repository=user_repo,
-                caching_service=caching_service,
-                strategy_factory=strategy_factory,
-                ml_service=ml_service,
-                logger=logger,
-                default_strategy=RecommendationStrategy.HYBRID
-            )
+        container = DependencyContainer(
+            orchestrator=orchestrator,
+            vehicle_repo=vehicle_repo,
+            user_repo=user_repo,
+            model_serving_service=model_serving,
+            redis_client=redis_client,
+            caching_service=caching_service,
+            db_manager=db_manager
+        )
 
-            container = DependencyContainer(
-                orchestrator=orchestrator,
-                vehicle_repo=vehicle_repo,
-                user_repo=user_repo,
-                model_serving_service=model_serving,
-                redis_client=redis_client,
-                caching_service=caching_service,
-            )
+        strategy_factory.container = container
+        app.state.container = container
 
-            strategy_factory.container = container
+        logger.info("Recommendation orchestrator initialized successfully")
 
-            app.state.container = container
-            logger.info("Recommendation orchestrator initialized successfully")
-
-            # Train models if missing
-            def model_exists(model_name: str) -> bool:
-                model_paths = {
+        async def train_missing_models():
+            def model_exists(name: str) -> bool:
+                paths = {
                     "collaborative": "trained_models/collaborative_model.pkl",
                     "vehicle_similarity": "trained_models/similarity_topk_vehicle.pkl",
                     "user_similarity": "trained_models/similarity_topk_user.pkl",
                 }
-                path = model_paths.get(model_name)
+                path = paths.get(name)
                 return path and os.path.exists(path)
 
             if not model_exists("vehicle_similarity"):
                 logger.info("Vehicle similarity model not found. Training...")
                 await ml_service.train_vehicle_similarity_model()
-
             if not model_exists("user_similarity"):
                 logger.info("User similarity model not found. Training...")
                 await ml_service.train_user_similarity_model()
-
             if not model_exists("collaborative"):
                 logger.info("Collaborative model not found. Training...")
                 await ml_service.train_collaborative_model()
-
             logger.info("✅ Model training checks completed")
 
-        except Exception as e:
-            logger.exception(f"❌ Failed to initialize recommendation system: {e}")
-            logger.warning("API will run but recommendations may not work")
+        asyncio.create_task(train_missing_models())
 
-    asyncio.create_task(init_recommendation_system())
+        yield
 
-    yield
-
-    logger.info("Shutting down AutoFi Vehicle Recommendation API...")
-    try:
-        await db_manager.close()
-        logger.info("Database pool closed successfully")
     except Exception as e:
-        logger.error(f"Error shutting down recommendation system: {e}")
+        logger.exception(f"❌ Failed to initialize recommendation system: {e}")
+        logger.warning("API will run but recommendations may not work")
+        yield
 
-    duration = time.time() - start_time
-    logger.info(f"⏱️ Startup duration: {duration:.2f} seconds")
+    finally:
+        # Shutdown
+        logger.info("Shutting down AutoFi Vehicle Recommendation API...")
+        try:
+            await db_manager.close()
+            logger.info("Database pool closed successfully")
+        except Exception as e:
+            logger.error(f"Error closing DB pool: {e}")
 
+        duration = time.time() - start_time
+        logger.info(f"Startup duration: {duration:.2f} seconds")
 
-# Create FastAPI app with lifespan hook
 app = FastAPI(title="Vehicle Recommendation API", version=APP_VERSION, lifespan=lifespan)
 app.state.limiter = limiter
 
@@ -176,7 +175,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Routes
 app.include_router(recommendation_routes.router, prefix="/api/recommendations", dependencies=[])
-
+app.include_router(ai_assistant_routes.router, prefix="/api/ai", dependencies=[])
 
 @app.get("/")
 async def root():

@@ -3,32 +3,34 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL")
-    DB_POOL_MIN: int = int(os.getenv("DB_POOL_MIN", "5"))
-    DB_POOL_MAX: int = int(os.getenv("DB_POOL_MAX", "20"))
+    DATABASE_URL: str
+    DB_POOL_MIN: int
+    DB_POOL_MAX: int
 
     # Redis
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
-    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
-    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
+    REDIS_HOST: str
+    REDIS_PORT: int
+    REDIS_DB: int
 
     # Auth
-    JWT_SECRET: str = os.getenv("JWT_SECRET", "ThisIsATemporarySecretKeyForDevelopmentUseOnly2024!")
-    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-    JWT_AUDIENCE: str = os.getenv("JWT_AUDIENCE", "AutoFiCoreClient")
+    JWT_SECRET: str
+    JWT_ALGORITHM: str
+    JWT_AUDIENCE: str
+
+    OPENAI_API_KEY: str
 
     # ML Model
-    MODEL_PATH: str = os.getenv("MODEL_PATH", "trained_models/")
-    MAX_RECOMMENDATIONS: int = int(os.getenv("MAX_RECOMMENDATIONS", "10"))
+    MODEL_PATH: str
+    MAX_RECOMMENDATIONS: int
 
     # Server
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    HOST: str
+    PORT: int
 
     # Environment
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    ENVIRONMENT: str
 
     # Pydantic v2 style
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="allow")
 
 settings = Settings()

@@ -1,7 +1,9 @@
+import json
 from redis.asyncio import Redis
 from typing import Optional
 from app.schemas.schemas import RecommendationResponse
-
+from app.schemas.ai_schemas import UserContext
+from app.services.ai_assistant_service import AIResponse
 class CachingService:
     """
     Centralized Redis caching with consistent key schema and TTL handling.
@@ -57,3 +59,17 @@ class CachingService:
         async for key in self.redis.scan_iter(match=pattern):
             deleted += await self.redis.delete(key)
         return deleted
+
+    def _key_ml_context(self, user_id: int) -> str:
+        return f"context:user:{user_id}:ml"
+
+    async def get_cached_ml_context(self, user_id: int) -> Optional[dict]:
+        key = self._key_ml_context(user_id)
+        cached = await self.redis.get(key)
+        if not cached:
+            return None
+        return json.loads(cached)
+
+    async def set_cached_ml_context(self, user_id: int, context: dict, ttl: Optional[int] = None) -> None:
+        key = self._key_ml_context(user_id)
+        await self.redis.setex(key, ttl or self.default_ttl, json.dumps(context, default=str))

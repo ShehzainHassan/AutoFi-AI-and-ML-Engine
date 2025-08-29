@@ -1,0 +1,56 @@
+from pydantic import BaseModel
+from typing import List, Optional, Any, Literal, Dict
+from enum import Enum
+from datetime import datetime
+
+class UIType(str, Enum):
+    TEXT = "TEXT"
+    TABLE = "TABLE"
+    CARD_GRID = "CARD_GRID"
+    CALCULATOR = "CALCULATOR"
+    CHART = "CHART"
+
+class AIQueryRequest(BaseModel):
+    user_id: Optional[int] = None
+    question: str
+    context: Optional[str] = None
+    session_id: Optional[str] = None
+
+class AIResponseModel(BaseModel):
+    answer: str
+    ui_type: UIType = UIType.TEXT
+    query_type: str = "GENERAL"
+    data: Any
+    suggested_actions: Optional[List[str]] = []
+    sources: Optional[List[str]] = [],
+    session_id: Optional[str] = None
+
+class UserContext(BaseModel):
+    recent_searches: Optional[List[str]] = []
+    auction_history: Optional[List[int]] = []
+    favorites: Optional[List[int]] = []
+    preferences: Optional[dict] = {}
+
+class AIQueryFeedback(BaseModel):
+    user_id: int
+    session_id: Optional[str] = None
+    query: str
+    feedback: str
+
+class ChatSessionSummary(BaseModel):
+    session_id: str
+    title: str
+    created_at: datetime
+
+class ChatMessageModel(BaseModel):
+    sender: Literal["user", "assistant"]
+    message: str
+    timestamp: datetime
+    ui_type: Optional[UIType]
+    query_type: Optional[str]
+    suggested_actions: Optional[List[str]] = []
+    sources: Optional[List[str]] = []
+
+class EnrichedAIQuery(BaseModel):
+    query: AIQueryRequest
+    context: Dict[str, Any]
