@@ -9,13 +9,11 @@ from redis.asyncio import Redis
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-import simplejson as json
-
 from app.db import DatabaseManager
 from app.repositories.vehicle_repository import VehicleRepository
 from app.repositories.user_repository import UserRepository
 from app.services.ml_service import MLModelService
-from app.services.recommendation_orchestrator import RecommendationOrchestrator
+from app.orchestrators.recommendation_orchestrator import RecommendationOrchestrator
 from app.services.caching_service import CachingService
 from app.middleware.rate_limit_middleware import limiter
 from app.dependencies.dependency_container import DependencyContainer
@@ -75,7 +73,6 @@ async def lifespan(app: FastAPI):
         vehicle_repo = VehicleRepository(pool=pool, vehicle_limit=20000)
         user_repo = UserRepository(pool=pool)
 
-        # Load vehicle features in background
         asyncio.create_task(vehicle_repo.load_vehicle_features())
 
         ml_config = MLConfig()
@@ -134,7 +131,7 @@ async def lifespan(app: FastAPI):
             if not model_exists("collaborative"):
                 logger.info("Collaborative model not found. Training...")
                 await ml_service.train_collaborative_model()
-            logger.info("✅ Model training checks completed")
+            logger.info("Model training checks completed")
 
         asyncio.create_task(train_missing_models())
 
@@ -146,7 +143,6 @@ async def lifespan(app: FastAPI):
         yield
 
     finally:
-        # Shutdown
         logger.info("Shutting down AutoFi Vehicle Recommendation API...")
         try:
             await db_manager.close()

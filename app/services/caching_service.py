@@ -2,8 +2,6 @@ import json
 from redis.asyncio import Redis
 from typing import Optional
 from app.schemas.schemas import RecommendationResponse
-from app.schemas.ai_schemas import UserContext
-from app.services.ai_assistant_service import AIResponse
 class CachingService:
     """
     Centralized Redis caching with consistent key schema and TTL handling.

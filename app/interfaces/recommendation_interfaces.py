@@ -28,7 +28,6 @@ class IVehicleRepository(ABC):
 
 class IMLModelService(ABC):
     """ML model inference, training, and persistence (content-based & collaborative)."""
-
     @abstractmethod
     async def prepare_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         pass

@@ -19,14 +19,13 @@ RELEVANT_TABLES = {
     "UserInteractions": ["Id", "UserId", "VehicleId", "InteractionType", "CreatedAt"],
     "Watchlists": ["WatchlistId", "UserId", "AuctionId", "CreatedUtc"],
     "AuctionAnalytics": ["AuctionId", "TotalViews", "UniqueBidders", "TotalBids", "StartPrice", "FinalPrice", "EngagementScore"],
-    "AnalyticsEvents": ["Id", "EventType", "UserId", "AuctionId", "EventData", "Source", "CreatedAt"]
+    "AnalyticsEvents": ["Id", "EventType", "UserId", "AuctionId", "EventData", "Source", "CreatedAt"],
 }
 
 # Enum references for AI understanding
 ENUMS = {
     "BidStrategyType": ["Conservative", "Aggressive", "Incremental"]
 }
-
 @lru_cache(maxsize=1)
 def get_schema_context() -> str:
     """

@@ -23,7 +23,6 @@ class AIResponseModel(BaseModel):
     data: Any
     suggested_actions: Optional[List[str]] = []
     sources: Optional[List[str]] = [],
-    session_id: Optional[str] = None
 
 class UserContext(BaseModel):
     recent_searches: Optional[List[str]] = []
@@ -54,3 +53,17 @@ class ChatMessageModel(BaseModel):
 class EnrichedAIQuery(BaseModel):
     query: AIQueryRequest
     context: Dict[str, Any]
+
+class FeedbackEnum(str, Enum):
+    NOTVOTED = "NOTVOTED"
+    UPVOTED = "UPVOTED"
+    DOWNVOTED = "DOWNVOTED"
+
+class AIQueryFeedback(BaseModel):
+    message_id: int
+    vote: FeedbackEnum
+
+class PopularQueryDTO(BaseModel):
+    text: str
+    count: int
+    last_asked: Optional[str]

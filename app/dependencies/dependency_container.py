@@ -16,8 +16,15 @@ from app.services.score_combiner import ScoreCombiner
 from app.services.model_serving_service import ModelServingService
 from app.db import DatabaseManager
 from app.services.user_context_service import MLUserContextService
-logger = logging.getLogger(__name__)
+from app.services.feedback_service import FeedbackService
+from app.services.ai_assistant_service import AIQueryService
+from config.app_config import settings
+from app.services.query_executor import QueryExecutor
+from app.utils.openai_client import OpenAIClient
+from app.services.popular_query_service import PopularQueryService
+from app.orchestrators.assistant_orchestrator import AssistantOrchestrator
 
+logger = logging.getLogger(__name__)
 
 class DependencyContainer:
     def __init__(
@@ -93,8 +100,26 @@ class DependencyContainer:
                 self._instances[interface] = ScoreCombiner()
             elif interface.__name__ == "IRecommendationOrchestrator":
                 self._instances[interface] = self._orchestrator
+            elif interface.__name__ == "IAssistantOrchestrator":
+                ai_service = self.get(AIQueryService)
+                ml_service = self.get(MLUserContextService)
+                feedback_service = self.get(FeedbackService)
+                popular_query_service = PopularQueryService(model_name="all-mpnet-base-v2", similarity_threshold=0.68)
+
+                self._instances[interface] = AssistantOrchestrator(
+                    ai_service=ai_service,
+                    ml_service=ml_service,
+                    feedback_service=feedback_service,
+                    popular_query_service=popular_query_service,
+                    db_manager=self.db_manager,
+                )
+            elif interface.__name__ == "AIQueryService":
+                openai_client = OpenAIClient(api_key=settings.OPENAI_API_KEY)
+                self._instances[interface] = AIQueryService(openai_client=openai_client, query_executor=QueryExecutor(db_manager=self.db_manager))
             elif interface.__name__ == "MLUserContextService":
                 self._instances[interface] = MLUserContextService(db=self._db_manager,cache=self._caching_service)
+            elif interface.__name__ == "FeedbackService":
+                self._instances[interface] = FeedbackService(db_manager=self._db_manager)
             else:
                 raise ValueError(f"No binding found for {interface}")
 
