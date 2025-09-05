@@ -23,6 +23,7 @@ class AIResponseModel(BaseModel):
     data: Any
     suggested_actions: Optional[List[str]] = []
     sources: Optional[List[str]] = [],
+    ui_block: Optional[str] = None
 
 class UserContext(BaseModel):
     recent_searches: Optional[List[str]] = []

@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.services.ai_assistant_service import AIQueryService
 from app.services.user_context_service import MLUserContextService
 from app.services.feedback_service import FeedbackService
@@ -49,3 +49,13 @@ class AssistantOrchestrator:
     async def get_popular_queries(self, conn, limit: int = 10) -> List[PopularQueryDTO]:
         async with self.db_manager.get_connection() as conn:
             return await self.popular_query_service.get_top_popular_queries(conn, limit)
+        
+    async def save_popular_query(self, question: str, db_manager: Optional[DatabaseManager] = None) -> Dict:
+        try:
+            return await self.popular_query_service.save_popular_query(
+                question=question,
+                db_manager=db_manager or self.db_manager
+            )
+        except Exception as e:
+            logger.error(f"Failed to save popular query: {e}")
+            return {"ok": False, "reason": "exception during save"}

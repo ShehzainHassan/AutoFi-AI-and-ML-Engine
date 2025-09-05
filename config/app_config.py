@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     JWT_AUDIENCE: str
 
     OPENAI_API_KEY: str
+    OPENAI_MODEL: str
 
     # ML Model
     MODEL_PATH: str

@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 from app.services.schema_provider import RELEVANT_TABLES
 
 logger = logging.getLogger(__name__)
-
+MAX_ROWS = 10
 
 class QueryExecutor:
     def __init__(self, db_manager):
@@ -33,6 +33,7 @@ class QueryExecutor:
         return query
 
 
+
     async def execute_safe_query(
         self, query: str, params: Dict[str, Any] = {}
     ) -> List[Dict[str, Any]]:
@@ -40,8 +41,11 @@ class QueryExecutor:
             logger.warning(f"Query blocked due to unsafe content: {query}")
             return [{"error": "Unsafe query detected."}]
 
-        # 🔹 Apply schema enforcement before execution
         query = self.enforce_schema(query)
+
+        lowered = query.lower()
+        if "limit" not in lowered and "count(" not in lowered:
+            query = query.rstrip().rstrip(";") + f" LIMIT {MAX_ROWS}"
 
         try:
             async with self.db_manager.get_connection() as conn:
@@ -50,6 +54,7 @@ class QueryExecutor:
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
             return [{"error": "Database query execution failed."}]
+
 
     def validate_query(self, query: str) -> bool:
         stripped_query = query.strip()
@@ -85,3 +90,5 @@ class QueryExecutor:
                 return False
 
         return True
+
+

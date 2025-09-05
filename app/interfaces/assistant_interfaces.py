@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Optional
 from app.schemas.ai_schemas import AIResponseModel, PopularQueryDTO
+from app.db import DatabaseManager
+
 class IAssistantOrchestrator(ABC):
     """High-level orchestration for AI Assistant queries, context, and feedback."""
 
@@ -18,4 +20,8 @@ class IAssistantOrchestrator(ABC):
 
     @abstractmethod
     async def get_popular_queries(self, limit: int = 10) -> List["PopularQueryDTO"]:
+        pass
+
+    @abstractmethod
+    async def save_popular_query(self, question: str, db_manager: Optional[DatabaseManager] = None) -> Dict:
         pass

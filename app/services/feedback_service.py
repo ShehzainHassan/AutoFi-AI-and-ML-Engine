@@ -24,7 +24,6 @@ class FeedbackService:
             if current_feedback == vote.value:
                 new_feedback = FeedbackEnum.NOT_VOTED.value
 
-            # Update feedback
             await conn.execute(
                 'UPDATE "ChatMessages" SET "Feedback" = $1 WHERE "Id" = $2',
                 new_feedback, message_id
