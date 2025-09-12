@@ -23,10 +23,11 @@ from .routes import recommendation_routes
 from app.services.model_serving_service import ModelServingService
 from app.strategies.recommendation_strategies import RecommendationStrategyFactory, RecommendationStrategy
 from app.routes import ai_assistant_routes, recommendation_routes
+from app.utils.query_classifier import preload_model_and_cache
 
 APP_VERSION = "1.0.0"
 MAX_RETRIES = 5
-RETRY_DELAY = 2  # seconds
+RETRY_DELAY = 2 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ async def lifespan(app: FastAPI):
             decode_responses=True
         )
         await retry_async(redis_client.ping, "Redis Ping")
-
+        await preload_model_and_cache(redis_client)
         vehicle_repo = VehicleRepository(pool=pool, vehicle_limit=20000)
         user_repo = UserRepository(pool=pool)
 
@@ -203,3 +204,4 @@ async def health():
         "orchestrator_ready": orchestrator_ready,
         "version": APP_VERSION,
     }
+

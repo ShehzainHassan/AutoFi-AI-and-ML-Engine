@@ -98,7 +98,6 @@ class PopularQueryService:
                 if emb_vec is None:
                     continue
                 sim = util.cos_sim(new_emb, emb_vec)[0][0].item()
-                logger.info(f"Similarity with '{rows[idx]['DisplayText']}': {sim:.4f}")
                 if sim > best_sim:
                     best_sim = sim
                     best_id = existing_ids[idx]

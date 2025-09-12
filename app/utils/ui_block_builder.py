@@ -1,12 +1,9 @@
+import html
 import simplejson as json
-
+from typing import Optional
 class UIBlockBuilder:
     @staticmethod
-    def build(ui_type: str, data, answer: str) -> str:
-        """
-        Build HTML block for the given UI type, always showing the answer first.
-        """
-
+    def build(ui_type: str, data, answer: str, chart_type: Optional[str] = None) -> str:
         answer_html = f"<p>{answer}</p>"
 
         if ui_type == "TEXT":
@@ -41,21 +38,32 @@ class UIBlockBuilder:
                 <div class='card-grid'>{cards}</div>
             """
 
-        elif ui_type == "CALCULATOR":
+        elif ui_type == "CALCULATOR" and isinstance(data, dict):
+            calc_html = "".join([
+                f"<p><strong>{k.replace('_', ' ').title()}:</strong> {v}</p>" for k, v in data.items()
+            ])
             return f"""
                 {answer_html}
                 <div class="card-grid">
-                    <div class="card"><strong>Calculation Result:</strong> {answer}</div>
+                    <div class="card">{calc_html}</div>
                 </div>
             """
 
         elif ui_type == "CHART":
+            chart_type = chart_type or "bar"
+
+            if isinstance(data, dict) and "data" in data:
+                chart_type = data.get("chart_type", chart_type)
+                data = data.get("data", [])
+
+            if chart_type not in ("bar", "line", "pie"):
+                chart_type = "bar"
+
+            chart_data_json = html.escape(json.dumps(data, default=str))
+
             return f"""
                 {answer_html}
-                <div class="chart-block">
-                    <strong>Chart Data:</strong>
-                    <pre>{json.dumps(data, indent=2)}</pre>
-                </div>
+                <div class="chart-block" data-chart-type="{chart_type}" data-chart="{chart_data_json}"></div>
             """
 
         else:

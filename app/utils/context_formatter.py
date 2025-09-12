@@ -2,7 +2,7 @@ import simplejson as json
 from datetime import datetime
 from typing import Optional
 from collections import Counter
- 
+
 def json_safe(obj):
     """Safely serialize datetime and other non-serializable types."""
     if isinstance(obj, datetime):
@@ -36,19 +36,24 @@ def format_context_for_prompt(context: Optional[dict]) -> str:
 
     # ML Context Summary
     if ml_ctx:
+        user_id = ml_ctx.get("user_id")
+        user_name = ml_ctx.get("user_name")
+        user_email = ml_ctx.get("user_email")
         interactions = ml_ctx.get("user_interactions", [])
         analytics_events = ml_ctx.get("analytics_events", [])
 
-    # Interaction summary
-    interaction_counts = Counter(i.get("InteractionType") for i in interactions)
-    parts.append(
-        f"ML Context Summary (last {min(5,len(interactions))} interactions/events):\n"
-        f"- Recent interactions: {len(interactions)} (by type: {', '.join(f'{k}: {v}' for k, v in interaction_counts.items())})\n"
-        f"- Recent behavioral events: {len(analytics_events)} "
-        f"(by type: {', '.join(f'{k}: {v}' for k, v in Counter(e.get('EventType') for e in analytics_events).items())})\n"
-        "(Reflects the user's latest engagement patterns for personalization.)"
-    )
+        interaction_counts = Counter(i.get("InteractionType") for i in interactions)
+        event_counts = Counter(e.get("EventType") for e in analytics_events)
 
+        parts.append(
+            f"ML Context Summary:\n"
+            f"- User ID: {user_id}\n"
+            f"- Name: {user_name}\n"
+            f"- Email: {user_email}\n"
+            f"- Recent interactions: {len(interactions)} (by type: {', '.join(f'{k}: {v}' for k, v in interaction_counts.items())})\n"
+            f"- Recent behavioral events: {len(analytics_events)} (by type: {', '.join(f'{k}: {v}' for k, v in event_counts.items())})\n"
+            f"(Reflects the user's latest engagement patterns for personalization.)"
+        )
 
     compact_json = json.dumps(context, separators=(",", ":"), default=json_safe)
 

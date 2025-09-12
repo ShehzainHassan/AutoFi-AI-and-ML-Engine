@@ -1,7 +1,6 @@
 from pydantic import BaseModel
-from typing import List, Optional, Any, Literal, Dict
+from typing import List, Optional, Any, Dict
 from enum import Enum
-from datetime import datetime
 
 class UIType(str, Enum):
     TEXT = "TEXT"
@@ -24,6 +23,8 @@ class AIResponseModel(BaseModel):
     suggested_actions: Optional[List[str]] = []
     sources: Optional[List[str]] = [],
     ui_block: Optional[str] = None
+    chart_type: Optional[str] = None
+
 
 class UserContext(BaseModel):
     recent_searches: Optional[List[str]] = []
@@ -36,20 +37,6 @@ class AIQueryFeedback(BaseModel):
     session_id: Optional[str] = None
     query: str
     feedback: str
-
-class ChatSessionSummary(BaseModel):
-    session_id: str
-    title: str
-    created_at: datetime
-
-class ChatMessageModel(BaseModel):
-    sender: Literal["user", "assistant"]
-    message: str
-    timestamp: datetime
-    ui_type: Optional[UIType]
-    query_type: Optional[str]
-    suggested_actions: Optional[List[str]] = []
-    sources: Optional[List[str]] = []
 
 class EnrichedAIQuery(BaseModel):
     query: AIQueryRequest

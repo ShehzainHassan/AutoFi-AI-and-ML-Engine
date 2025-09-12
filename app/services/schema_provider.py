@@ -54,5 +54,10 @@ def get_schema_context() -> str:
         "performance (horsepower, torqueFtLBS, drivetrain, ZeroTo60MPH), "
         "measurements (doors, maximumSeating, heightInches, widthInches, lengthInches, wheelbaseInches, groundClearance, "
         "cargoCapacityCuFt, curbWeightLBS), and options (list of strings like 'Alloy wheels', 'Leather seats').\n"
-    )    
+    )
+
+    column_table_map = "\n".join(
+        f"- {col} → {table}" for table, cols in RELEVANT_TABLES.items() for col in cols
+    )
+    schema_text += "\nColumn-to-table map:\n" + column_table_map    
     return schema_text

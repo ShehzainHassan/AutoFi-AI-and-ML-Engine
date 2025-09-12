@@ -18,6 +18,15 @@ class MLUserContextService:
             return cached
 
         async with self.db.get_connection() as conn:
+            identity_query = """
+                SELECT "Id", "Name", "Email"
+                FROM "Users"
+                WHERE "Id" = $1
+            """
+            user_row = await conn.fetchrow(identity_query, user_id)
+            if not user_row:
+                return {}
+
             interactions_query = """
                 SELECT "VehicleId", "InteractionType", "CreatedAt"
                 FROM "UserInteractions"
@@ -36,10 +45,12 @@ class MLUserContextService:
             events = await conn.fetch(events_query, user_id)
 
         context = {
+            "user_id": user_row["Id"],
+            "user_name": user_row["Name"],
+            "user_email": user_row["Email"],
             "user_interactions": [dict(i) for i in interactions],
             "analytics_events": [dict(e) for e in events]
         }
 
         await self.cache.set_cached_ml_context(user_id, context)
-
         return context
