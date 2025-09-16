@@ -21,10 +21,9 @@ class AIResponseModel(BaseModel):
     query_type: str = "GENERAL"
     data: Any
     suggested_actions: Optional[List[str]] = []
-    sources: Optional[List[str]] = [],
+    sources: Optional[List[str]] = []
     ui_block: Optional[str] = None
     chart_type: Optional[str] = None
-
 
 class UserContext(BaseModel):
     recent_searches: Optional[List[str]] = []
@@ -47,7 +46,7 @@ class FeedbackEnum(str, Enum):
     UPVOTED = "UPVOTED"
     DOWNVOTED = "DOWNVOTED"
 
-class AIQueryFeedback(BaseModel):
+class FeedbackVote(BaseModel):
     message_id: int
     vote: FeedbackEnum
 

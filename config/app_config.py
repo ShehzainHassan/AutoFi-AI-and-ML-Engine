@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     OPENAI_API_KEY: str
     OPENAI_MODEL: str
+    OPENAI_MAX_TOKENS: int
+    OPENAI_TIMEOUT:str
 
     # ML Model
     MODEL_PATH: str

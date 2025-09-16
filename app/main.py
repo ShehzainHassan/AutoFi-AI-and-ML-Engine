@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
@@ -22,8 +22,10 @@ from config.app_config import settings
 from .routes import recommendation_routes
 from app.services.model_serving_service import ModelServingService
 from app.strategies.recommendation_strategies import RecommendationStrategyFactory, RecommendationStrategy
-from app.routes import ai_assistant_routes, recommendation_routes
+from app.routes import ai_assistant_routes, recommendation_routes, health
 from app.utils.query_classifier import preload_model_and_cache
+from app.observability.metrics import attach_metrics
+from app.observability.tracing import setup_tracing
 
 APP_VERSION = "1.0.0"
 MAX_RETRIES = 5
@@ -157,6 +159,9 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Vehicle Recommendation API", version=APP_VERSION, lifespan=lifespan)
 app.state.limiter = limiter
 
+attach_metrics(app)
+setup_tracing(app)
+
 # Middleware
 app.add_middleware(
     CORSMiddleware,
@@ -173,35 +178,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Routes
 app.include_router(recommendation_routes.router, prefix="/api/recommendations", dependencies=[])
 app.include_router(ai_assistant_routes.router, prefix="/api/ai", dependencies=[])
+app.include_router(health.router, prefix="/api/ai")
 
 @app.get("/")
 async def root():
     return {"message": "Vehicle Recommendation API is running.", "version": APP_VERSION}
-
-@app.get("/health")
-async def health():
-    db_ready = db_manager.pool is not None
-
-    orchestrator_ready = False
-    ml_ready = False
-
-    if app.state.container:
-        try:
-            orchestrator = app.state.container.orchestrator
-            orchestrator_ready = orchestrator is not None
-        except Exception:
-            pass
-
-        try:
-            ml_service = app.state.container.ml_service
-            ml_ready = getattr(ml_service, "models_loaded", False)
-        except Exception:
-            pass
-
-    return {
-        "db": db_ready,
-        "ml_models_loaded": ml_ready,
-        "orchestrator_ready": orchestrator_ready,
-        "version": APP_VERSION,
-    }
-

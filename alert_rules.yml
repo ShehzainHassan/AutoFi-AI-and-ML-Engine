@@ -1,0 +1,29 @@
+groups:
+  - name: boxcars-ai-alerts
+    rules:
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.95, sum(rate(request_latency_seconds_bucket[5m])) by (le, endpoint, method)) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency"
+          description: "95th percentile latency for {{ $labels.endpoint }} ({{ $labels.method }}) is above 1s."
+
+      - alert: ServiceDown
+        expr: up{job="boxcars-ai"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Boxcars AI service is down"
+          description: "Prometheus target boxcars-ai is unreachable."
+      
+      - alert: HighErrorRate
+        expr: increase(request_errors_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High AI error rate"
+          description: "More than 5 AI errors in the last 5 minutes."

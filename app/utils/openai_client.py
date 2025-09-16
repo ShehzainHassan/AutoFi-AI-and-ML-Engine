@@ -1,35 +1,44 @@
 import time
 import logging
 from openai import OpenAI, OpenAIError, AuthenticationError
-from config.app_config import settings
+from config.app_config import settings  
 
 logger = logging.getLogger(__name__)
 
 class OpenAIClient:
-    def __init__(self, api_key: str):
-        self.client = OpenAI(api_key=api_key)
+    def __init__(self):
+        self.api_key = settings.OPENAI_API_KEY
+        self.model = settings.OPENAI_MODEL
+        self.max_tokens = settings.OPENAI_MAX_TOKENS
+        self.timeout = int(settings.OPENAI_TIMEOUT) 
+        self.client = OpenAI(api_key=self.api_key)
 
-    def call_openai_with_retry(self, prompt: str, max_attempts: int = 3) -> str:
+    def call_openai_with_retry(self, prompt: str, max_attempts: int = 3, return_usage: bool = False) -> str:
         delay = 1
         for attempt in range(1, max_attempts + 1):
             try:
                 logger.debug(
-                    f"[OpenAI] Attempt {attempt} | model={settings.OPENAI_MODEL} | "
+                    f"[OpenAI] Attempt {attempt} | model={self.model} | "
                     f"prompt_len={len(prompt)} | preview={prompt[:200]!r}"
                 )
+
                 response = self.client.chat.completions.create(
-                    model=settings.OPENAI_MODEL,
+                    model=self.model,
                     messages=[
                         {"role": "system", "content": "You are BoxAssistant, an AI assistant for AutoFi."},
                         {"role": "user", "content": prompt}
                     ],
-                    timeout=20,
+                    timeout=self.timeout,
                     temperature=0.2,
-                    max_tokens=500,
+                    max_tokens=self.max_tokens,
                 )
+
                 logger.debug(f"[OpenAI] Attempt {attempt} succeeded. Usage: {response.usage}")
                 logger.debug(f"[OpenAI] Finish reason: {response.choices[0].finish_reason}")
                 logger.debug(f"[OpenAI] Raw content: {response.choices[0].message.content!r}")
+                
+                if return_usage:
+                    return response.choices[0].message.content, response.usage
                 return response.choices[0].message.content
 
             except AuthenticationError as e:

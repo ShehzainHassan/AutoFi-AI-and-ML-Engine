@@ -15,7 +15,7 @@ RELEVANT_TABLES = {
     "Bids": ["BidId", "AuctionId", "UserId", "Amount", "IsAuto", "CreatedUtc"],
     "AutoBids": ["Id","UserId", "AuctionId", "MaxBidAmount", "CurrentBidAmount", "IsActive", "BidStrategyType", "CreatedAt", "UpdatedAt", "ExecutedAt"],
     "BidStrategies": ["AuctionId", "UserId", "Type", "BidDelaySeconds", "MaxBidsPerMinute", "MaxSpreadBids", "PreferredBidTiming", "CreatedAt", "UpdatedAt"],
-    "Users": ["Id", "Name", "Email", "CreatedUtc", "LastLoggedIn", "Password"],
+    "Users": ["Id", "Name", "Email", "CreatedUtc", "LastLoggedIn"],
     "UserSavedSearches": ["UserId", "Search"],
     "UserInteractions": ["Id", "UserId", "VehicleId", "InteractionType", "CreatedAt"],
     "Watchlists": ["WatchlistId", "UserId", "AuctionId", "CreatedUtc"],

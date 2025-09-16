@@ -74,53 +74,62 @@ class DependencyContainer:
         return self._redis_client
 
     def get(self, interface):
-            """Resolve dependencies by interface type."""
-            if interface in self._instances:
-                return self._instances[interface]
-
-            if interface.__name__ == "IContentBasedRecommender":
-                self._instances[interface] = ContentBasedRecommender(
-                    vehicle_repository=self._vehicle_repo,
-                    model_service=self.model_serving_service,      
-                    caching_service=self._caching_service
-                )
-            elif interface.__name__ == "ICollaborativeRecommender":
-                self._instances[interface] = CollaborativeBasedRecommender(
-                    model_serving=self.model_serving_service,        
-                )
-            elif interface.__name__ == "IHybridRecommender":
-                self._instances[interface] = HybridRecommender(
-                    user_repo=self._user_repo,
-                    vehicle_repo=self._vehicle_repo,
-                    content_recommender=self.get(IContentBasedRecommender),
-                    collab_recommender=self.get(ICollaborativeRecommender),
-                    score_combiner=self.get(IScoreCombiner)
-                )
-            elif interface.__name__ == "IScoreCombiner":
-                self._instances[interface] = ScoreCombiner()
-            elif interface.__name__ == "IRecommendationOrchestrator":
-                self._instances[interface] = self._orchestrator
-            elif interface.__name__ == "IAssistantOrchestrator":
-                ai_service = self.get(AIQueryService)
-                ml_service = self.get(MLUserContextService)
-                feedback_service = self.get(FeedbackService)
-                popular_query_service = PopularQueryService(model_name="all-mpnet-base-v2", similarity_threshold=0.68)
-
-                self._instances[interface] = AssistantOrchestrator(
-                    ai_service=ai_service,
-                    ml_service=ml_service,
-                    feedback_service=feedback_service,
-                    popular_query_service=popular_query_service,
-                    db_manager=self.db_manager,
-                )
-            elif interface.__name__ == "AIQueryService":
-                openai_client = OpenAIClient(api_key=settings.OPENAI_API_KEY)
-                self._instances[interface] = AIQueryService(openai_client=openai_client, query_executor=QueryExecutor(db_manager=self.db_manager))
-            elif interface.__name__ == "MLUserContextService":
-                self._instances[interface] = MLUserContextService(db=self._db_manager,cache=self._caching_service)
-            elif interface.__name__ == "FeedbackService":
-                self._instances[interface] = FeedbackService(db_manager=self._db_manager)
-            else:
-                raise ValueError(f"No binding found for {interface}")
-
+        """Resolve dependencies by interface type."""
+        if interface in self._instances:
             return self._instances[interface]
+
+        if interface.__name__ == "IContentBasedRecommender":
+            self._instances[interface] = ContentBasedRecommender(
+                vehicle_repository=self._vehicle_repo,
+                model_service=self.model_serving_service,      
+                caching_service=self._caching_service
+            )
+        elif interface.__name__ == "ICollaborativeRecommender":
+            self._instances[interface] = CollaborativeBasedRecommender(
+                model_serving=self.model_serving_service,        
+            )
+        elif interface.__name__ == "IHybridRecommender":
+            self._instances[interface] = HybridRecommender(
+                user_repo=self._user_repo,
+                vehicle_repo=self._vehicle_repo,
+                content_recommender=self.get(IContentBasedRecommender),
+                collab_recommender=self.get(ICollaborativeRecommender),
+                score_combiner=self.get(IScoreCombiner)
+            )
+        elif interface.__name__ == "IScoreCombiner":
+            self._instances[interface] = ScoreCombiner()
+        elif interface.__name__ == "IRecommendationOrchestrator":
+            self._instances[interface] = self._orchestrator
+        elif interface.__name__ == "IAssistantOrchestrator":
+            ai_service = self.get(AIQueryService)
+            ml_service = self.get(MLUserContextService)
+            feedback_service = self.get(FeedbackService)
+            popular_query_service = PopularQueryService(
+                model_name="all-mpnet-base-v2",
+                similarity_threshold=0.68
+            )
+
+            self._instances[interface] = AssistantOrchestrator(
+                ai_service=ai_service,
+                ml_service=ml_service,
+                feedback_service=feedback_service,
+                popular_query_service=popular_query_service,
+                db_manager=self.db_manager,
+            )
+        elif interface.__name__ == "AIQueryService":
+            openai_client = OpenAIClient()
+            self._instances[interface] = AIQueryService(
+                openai_client=openai_client,
+                query_executor=QueryExecutor(db_manager=self.db_manager)
+            )
+        elif interface.__name__ == "MLUserContextService":
+            self._instances[interface] = MLUserContextService(
+                db=self._db_manager,
+                cache=self._caching_service
+            )
+        elif interface.__name__ == "FeedbackService":
+            self._instances[interface] = FeedbackService(db_manager=self._db_manager)
+        else:
+            raise ValueError(f"No binding found for {interface}")
+
+        return self._instances[interface]
