@@ -136,13 +136,6 @@ async def classify_query(query: str, user_context: dict = None) -> str:
 
     return max(scores, key=scores.get)
 
-
-user_context = {
-    "user_id": 27,
-    "name": "User A",
-    "email": "user_a@example.com"
-}
-
 async def preload_model_and_cache(redis_client):
     global model, cache
     if model is None:
