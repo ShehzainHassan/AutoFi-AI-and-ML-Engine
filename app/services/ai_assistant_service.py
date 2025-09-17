@@ -42,10 +42,10 @@ class AIQueryService:
                 return self._fallback_response("UNSAFE")
 
             with tracer.start_as_current_span("prompt_generation"):
-                if query_type == "GENERAL":
+                if query_type in {"GENERAL", "FINANCE_CALC"}:
                     prompt = GENERAL_PROMPT.format(user_query=user_query)
                 else:
-                    schema_context = get_schema_context()
+                    schema_context = get_schema_context(query_type)
                     user_context_str = format_context_for_prompt(context) if context else ""
                     prompt = STRUCTURED_PROMPT.format(
                         schema_context=schema_context,
@@ -56,7 +56,7 @@ class AIQueryService:
             logger.debug(f"[BoxAssistant] Prompt length: {len(prompt)}")
 
             with tracer.start_as_current_span("openai_call"):
-                raw_response, usage = self.openai_client.call_openai_with_retry(prompt, return_usage=True)
+                raw_response, usage = await self.openai_client.call_openai_with_retry(prompt, return_usage=True)
 
             logger.info(f"[BoxAssistant] Raw response: {raw_response}")
             if usage:
@@ -79,7 +79,7 @@ class AIQueryService:
             suggested_actions = []
             final_answer = ""
 
-            if query_type == "GENERAL":
+            if query_type in {"GENERAL", "FINANCE_CALC"}:
                 final_answer = clean_answer_text(parsed.get("answer", ""))
                 suggested_actions = parsed.get("suggested_actions", [])
                 ui_block = UIBlockBuilder.build(ui_type.value, data, final_answer, chart_type=chart_type)
@@ -137,7 +137,7 @@ class AIQueryService:
                     user_query=user_query,
                     data=json.dumps(safe_data, indent=2, default=str)
                 )
-                summary_response, _ = self.openai_client.call_openai_with_retry(summarization_prompt, return_usage=True)
+                summary_response, _ = await self.openai_client.call_openai_with_retry(summarization_prompt, return_usage=True)
                 logger.info(f"[BoxAssistant] Summary response: {summary_response}")
 
                 try:

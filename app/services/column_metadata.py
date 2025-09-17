@@ -46,7 +46,7 @@ COLUMN_METADATA = {
         "UpdatedAt": "datetime, required, UTC timestamp when the auto-bid was last updated",
         "ExecutedAt": "datetime, optional, UTC timestamp when the auto-bid was executed, if applicable",
     },
-     "BidStrategies": {
+    "BidStrategies": {
         "AuctionId": "integer, foreign key to Auctions table",
         "UserId": "integer, foreign key to Users table",
         "Type": "enum, bidding strategy type (Conservative, Aggressive, Incremental)",
@@ -63,7 +63,6 @@ COLUMN_METADATA = {
         "Email": "string(25), required, unique user email",
         "CreatedUtc": "datetime(UTC), account creation timestamp",
         "LastLoggedIn": "datetime(UTC), last login timestamp",
-        "Password": "string(100), required, hashed user password",
     },
     "UserSavedSearches": {
         "UserId": "integer, foreign key to Users.Id",
@@ -103,5 +102,4 @@ COLUMN_METADATA = {
         "Source": "enum, optional, source of the event e.g., Web, Mobile, API",
         "CreatedAt": "datetime, UTC timestamp when the event was created",
     }
-
 }

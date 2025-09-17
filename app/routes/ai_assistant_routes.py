@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from typing import List
 from fastapi.security import HTTPBearer
 import logging
-from app.schemas.ai_schemas import AIResponseModel, EnrichedAIQuery, AIQueryFeedback, PopularQueryDTO
+from app.schemas.ai_schemas import AIResponseModel, EnrichedAIQuery, FeedbackVote, PopularQueryDTO
 from app.exceptions.recommendation_exceptions import UserNotFoundError
 from app.security.auth_middleware import AuthService
 from config.app_config import settings
@@ -52,15 +52,22 @@ async def get_ml_user_context(user_id: int, orchestrator: IAssistantOrchestrator
 @limiter.limit("10/minute")
 async def submit_feedback(
     request: Request,
-    feedback: AIQueryFeedback,
+    feedback: FeedbackVote,
     orchestrator: IAssistantOrchestrator = Depends(get_assistant_orchestrator),
 ):
     try:
-        updated_vote = await orchestrator.submit_feedback(message_id=feedback.message_id, vote=feedback.vote)
+        updated_vote = await orchestrator.submit_feedback(
+            message_id=feedback.message_id,
+            vote=feedback.vote
+        )
         return {"message_id": feedback.message_id, "feedback": updated_vote}
+
     except MessageNotFoundError as e:
+        logger.warning(f"MessageNotFoundError: {e.message} | Code: {e.error_code}")
         raise HTTPException(status_code=404, detail={"error": e.message, "code": e.error_code})
-    except Exception:
+
+    except Exception as e:
+        logger.exception(f"Unhandled exception while submitting feedback for message_id={feedback.message_id}")
         raise HTTPException(status_code=500, detail="Failed to submit feedback")
 
 @router.get("/popular-queries", response_model=List[PopularQueryDTO])
