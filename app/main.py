@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
@@ -26,7 +26,7 @@ from app.routes import ai_assistant_routes, recommendation_routes, health
 from app.utils.query_classifier import preload_model_and_cache
 from app.observability.metrics import attach_metrics
 from app.observability.tracing import setup_tracing
-
+from app.dependencies.ai_dependencies import check_ai_enabled
 APP_VERSION = "1.0.0"
 MAX_RETRIES = 5
 RETRY_DELAY = 2 
@@ -177,8 +177,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Routes
 app.include_router(recommendation_routes.router, prefix="/api/recommendations", dependencies=[])
-app.include_router(ai_assistant_routes.router, prefix="/api/ai", dependencies=[])
-app.include_router(health.router, prefix="/api/ai")
+app.include_router(ai_assistant_routes.router, prefix="/api/ai", dependencies=[Depends(check_ai_enabled)])
+app.include_router(health.router, prefix="/api/ai", dependencies=[Depends(check_ai_enabled)])
 
 @app.get("/")
 async def root():
