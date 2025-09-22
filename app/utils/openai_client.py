@@ -1,7 +1,7 @@
 import time
 import logging
 import asyncio
-from typing import Tuple, Union
+from typing import Union, Tuple
 from openai import AsyncOpenAI, OpenAIError, AuthenticationError
 from config.app_config import settings
 from prometheus_client import Counter, Histogram
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class OpenAIClient:
     """
     Async OpenAI client with concurrency limits, queuing, retries,
-    metrics, and performance monitoring.
+    metrics, and performance monitoring. Streaming is always enabled.
     """
 
     def __init__(self, max_concurrent_requests: int = 5):
@@ -30,55 +30,55 @@ class OpenAIClient:
         self.model = settings.OPENAI_MODEL
         self.max_tokens = settings.OPENAI_MAX_TOKENS
         self.timeout = int(settings.OPENAI_TIMEOUT)
+        self.temperature = settings.OPENAI_TEMPERATURE
 
         self.client = AsyncOpenAI(api_key=self.api_key)
-
         self.semaphore = asyncio.Semaphore(max_concurrent_requests)
 
     async def call_openai_with_retry(
         self,
         prompt: str,
         max_attempts: int = 3,
-        return_usage: bool = False
-    ) -> Union[str, Tuple[str, dict]]:
-        """
-        Call OpenAI API with retry, queuing, and performance monitoring.
-        """
-
+        model: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None
+    ) -> str:
         delay = 1
+        model_to_use = model or self.model
+        max_tokens_to_use = max_tokens or self.max_tokens
+        temperature_to_use = temperature if temperature is not None else self.temperature
+
         for attempt in range(1, max_attempts + 1):
-            async with self.semaphore:  
+            async with self.semaphore:
                 start_time = time.perf_counter()
                 try:
                     logger.debug(
-                        f"[OpenAI] Attempt {attempt} | model={self.model} | "
+                        f"[OpenAI] Attempt {attempt} | model={model_to_use} | "
                         f"prompt_len={len(prompt)} | preview={prompt[:200]!r}"
                     )
 
-                    response = await self.client.chat.completions.create(
-                        model=self.model,
+                    response_stream = await self.client.chat.completions.create(
+                        model=model_to_use,
                         messages=[
                             {"role": "system", "content": "You are BoxAssistant, an AI assistant for AutoFi."},
                             {"role": "user", "content": prompt}
                         ],
                         timeout=self.timeout,
-                        temperature=0.2,
-                        max_tokens=self.max_tokens,
+                        temperature=temperature_to_use,
+                        max_tokens=max_tokens_to_use,
+                        stream=True
                     )
+
+                    content = ""
+                    async for chunk in response_stream:
+                        delta = chunk.choices[0].delta
+                        if delta and delta.content:
+                            content += delta.content
 
                     latency = time.perf_counter() - start_time
                     OPENAI_LATENCY.observe(latency)
                     OPENAI_REQUESTS.labels(status="success").inc()
-
-                    logger.debug(
-                        f"[OpenAI] Success in {latency:.2f}s | Usage: {response.usage} | "
-                        f"Finish reason: {response.choices[0].finish_reason}"
-                    )
-                    logger.debug(f"[OpenAI] Raw content: {response.choices[0].message.content!r}")
-
-                    if return_usage:
-                        return response.choices[0].message.content, response.usage
-                    return response.choices[0].message.content
+                    return content
 
                 except AuthenticationError as e:
                     OPENAI_REQUESTS.labels(status="auth_error").inc()

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_MAX_TOKENS: int = Field(default=5000, gt=0)
     OPENAI_TIMEOUT: float = Field(default=30.0, gt=0)
+    OPENAI_TEMPERATURE: float = Field(default=0.2, gt=0)
     AI_ENABLED: bool = True
 
     # ML Model

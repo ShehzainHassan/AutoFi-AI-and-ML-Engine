@@ -1,140 +1,148 @@
 import json
-from difflib import SequenceMatcher
-from typing import Optional, Dict, List
+from typing import Optional, Dict
 from sentence_transformers import SentenceTransformer, util
-from app.services.schema_provider import RELEVANT_TABLES
+import torch
+import torch.nn.functional as F
+from functools import lru_cache
 from app.services.caching_service import CachingService
+from rapidfuzz import fuzz
+
+FORBIDDEN_KEYWORDS = [
+    "drop", "delete", "alter", "insert", "update", "truncate", "--", "exec"
+]
 
 model: Optional[SentenceTransformer] = None
 cache: Optional[CachingService] = None
 
-CATEGORY_EXAMPLES = {
-    "GENERAL": [
-        "What is an electric vehicle?",
-        "Compare electric and hybrid vehicles",
-        "How do car engines work?",
-        "Explain auction process"
-    ],
-    "VEHICLE_SEARCH": [
-        "Show me SUVs under $30k",
-        "Find electric cars in my area",
-        "Search for used trucks",
-        "List hybrid vehicles",
-        "What is the average price of Toyota cars?"
-    ],
-    "AUCTION_SEARCH": [
-        "What auctions are currently live?",
-        "Show upcoming car auctions",
-        "List active auctions",
-        "Find auctions near me"
-    ],
-    "FINANCE_CALC": [
-        "Calculate monthly payment for $20k car",
-        "Estimate loan for vehicle",
-        "Finance options for new car",
-        "What will my EMI be?"
-    ],
-    "USER_SPECIFIC": [
-        "What vehicles have I recently viewed?",
-        "Did I win any auctions?",
-        "Show my saved searches",
-        "What bids have I placed?"
-    ]
-}
+class QueryClassifier:
+    """Classify natural language queries into categories using embeddings"""
 
-FORBIDDEN_KEYWORDS = [
-    "drop", "delete", "alter", "insert", "update",
-    "--", "exec", "truncate"
-]
+    def __init__(self):
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+        self._build_query_patterns()
 
-def is_similar(a: str, b: str, threshold: float = 0.8) -> bool:
-    return SequenceMatcher(None, a.lower(), b.lower()).ratio() >= threshold
+    @lru_cache(maxsize=1)
+    def _build_query_patterns(self):
+        """Define query categories and embed their example prompts"""
+        self.QUERY_PATTERNS: Dict[str, Dict] = {
+            "GENERAL": {
+                "examples": [
+                    "What is an electric vehicle?",
+                    "Compare electric and hybrid vehicles",
+                    "Explain auction process",
+                    "Define car transmission"
+                ]
+            },
+            "VEHICLE_SEARCH": {
+                "examples": [
+                    "Show me SUVs under $30k",
+                    "Find electric cars",
+                    "List hybrid vehicles",
+                    "What is the average price of Toyota cars?"
+                ]
+            },
+            "AUCTION_SEARCH": {
+                "examples": [
+                    "What auctions are currently live?",
+                    "Show upcoming car auctions",
+                    "List active auctions",
+                    "Find auctions near me"
+                ]
+            },
+            "FINANCE_CALC": {
+                "examples": [
+                    "Calculate monthly payment for $20k car",
+                    "Estimate loan for vehicle",
+                    "Finance options for new car",
+                    "What will my EMI be?"
+                ]
+            },
+            "USER_SPECIFIC": {
+                "examples": [
+                    "What vehicles have I recently viewed?",
+                    "Did I win any auctions?",
+                    "Show my saved searches",
+                    "What bids have I placed?"
+                ]
+            }
+        }
 
-def extract_user_specific_tables(relevant_tables: Dict[str, List[str]]):
-    return [
-        table.lower()
-        for table, columns in relevant_tables.items()
-        if any("UserId" in col for col in columns)
-    ]
+        self.pattern_embeddings: Dict[str, torch.Tensor] = {}
+        for category, info in self.QUERY_PATTERNS.items():
+            self.pattern_embeddings[category] = self.model.encode(
+                info["examples"], convert_to_tensor=True
+            )
 
-def boost_user_specific_by_table_semantics(query_embedding, user_tables):
-    table_embeddings = model.encode(user_tables, convert_to_tensor=True)
-    similarity = util.cos_sim(query_embedding, table_embeddings).max().item()
-    return similarity > 0.5
+    def is_query_unsafe(self, query: str, user_context: dict) -> bool:
+            """Check if query is unsafe due to SQL injection or sensitive data access"""
 
-def is_query_unsafe(query: str, user_context: dict, relevant_tables: dict) -> bool:
-    lowered_query = query.lower()
+            q = query.lower()
 
-    if any(keyword in lowered_query for keyword in FORBIDDEN_KEYWORDS):
-        return True
+            # 1. Block obvious SQL injection keywords (fuzzy tolerance)
+            for keyword in FORBIDDEN_KEYWORDS:
+                if fuzz.partial_ratio(keyword, q) > 85:  # allow typos like 'dropp' or 'deleet'
+                    return True
 
-    if "reserve" in lowered_query and "price" in lowered_query:
-        return True
-
-    if user_context:
-        if "user" in lowered_query and str(user_context["user_id"]) not in lowered_query:
-            return True
-        if user_context.get("name") and user_context["name"].lower() in lowered_query:
-            if f"my {user_context['name'].lower()}" not in lowered_query and "me" not in lowered_query:
+            # 2. Block "reserve price" queries (with typo tolerance)
+            if fuzz.partial_ratio("reserve price", q) > 80:
                 return True
-        if user_context.get("email") and user_context["email"].lower() in lowered_query:
-            if f"my {user_context['email'].lower()}" not in lowered_query and "me" not in lowered_query:
-                return True
 
-    user_fields = relevant_tables.get("Users", [])
-    sensitive_fields = [f.lower() for f in user_fields if f.lower() not in ["userid", "id"]]
-    if any(field in lowered_query for field in sensitive_fields):
-        return True
-    
+            # 3. User-specific info checks
+            if user_context:
+                user_id = str(user_context.get("user_id", "")).lower()
+                user_email = str(user_context.get("email", "")).lower()
+                user_name = str(user_context.get("name", "")).lower()
 
-    return False
+                # Possible sensitive terms
+                sensitive_terms = ["user id", "userid", "user email", "email", "username", "user name"]
 
-async def classify_query(query: str, user_context: dict = None) -> str:
-    if is_query_unsafe(query, user_context, RELEVANT_TABLES):
-        return "UNSAFE"
-    cache_key = f"embedding:query:{query}"
-    cached_embedding = await cache.redis.get(cache_key) if cache else None
-    if cached_embedding:
-        query_embedding = json.loads(cached_embedding)
-    else:
-        query_embedding = model.encode(query, convert_to_tensor=True)
-        if cache:
-            await cache.redis.setex(cache_key, 3600, json.dumps(query_embedding.tolist()))
+                for term in sensitive_terms:
+                    if fuzz.partial_ratio(term, q) > 80:
+                        # If user ID / email / name in query does not match logged-in user → UNSAFE
+                        if user_id and user_id not in q \
+                        and user_email and user_email not in q \
+                        and user_name and user_name not in q:
+                            return True
 
-    scores = {}
-    for category, examples in CATEGORY_EXAMPLES.items():
-        cat_key = f"embedding:category:{category}"
-        cached_examples = await cache.redis.get(cat_key) if cache else None
-        if cached_examples:
-            example_embeddings = json.loads(cached_examples)
+            return False
+
+    async def classify(self, query: str, user_context: dict = None) -> Dict[str, any]:
+        """Classify query into category and return confidence scores"""
+        if self.is_query_unsafe(query, user_context):
+            return {"category": "UNSAFE", "confidence_scores": {}}
+
+        cache_key = f"embedding:query:{query}"
+        cached = await cache.redis.get(cache_key) if cache else None
+        if cached:
+            query_embedding = torch.tensor(json.loads(cached))
         else:
-            example_embeddings = model.encode(examples, convert_to_tensor=True)
+            query_embedding = self.model.encode(query, convert_to_tensor=True)
             if cache:
-                await cache.redis.setex(cat_key, 86400, json.dumps(example_embeddings.tolist()))
+                await cache.redis.setex(
+                    cache_key, 3600, json.dumps(query_embedding.tolist())
+                )
 
-        similarity = util.cos_sim(query_embedding, example_embeddings).max().item()
-        scores[category] = similarity
+        scores: Dict[str, float] = {}
+        for category, embeddings in self.pattern_embeddings.items():
+            similarity = util.cos_sim(query_embedding, embeddings).max().item()
+            scores[category] = similarity
 
-    lowered_query = query.lower()
+        q = query.lower()
+        definitional_triggers = ["what is", "explain", "define", "difference between"]
+        if any(trigger in q for trigger in definitional_triggers):
+            scores["GENERAL"] = scores.get("GENERAL", 0) + 0.15
 
-    definitional_triggers = ["what is", "explain", "define", "how do", "how does", "difference between"]
-    if any(lowered_query.startswith(trigger) or trigger in lowered_query for trigger in definitional_triggers):
-        scores["GENERAL"] += 0.15
+        for category, val in scores.items():
+            scores[category] = max(0.0, min(1.0, (val + 1) / 2))
 
-    for table, cols in RELEVANT_TABLES.items():
-        for col in cols:
-            col_lower = col.lower()
-            if col_lower in lowered_query:
-                if table.lower() == "vehicles":
-                    scores["VEHICLE_SEARCH"] += 0.1
-                elif table.lower() == "auctions":
-                    scores["AUCTION_SEARCH"] += 0.1
+        best_category = max(scores, key=scores.get)
+        return {"category": best_category, "confidence_scores": scores}
 
-    user_tables = extract_user_specific_tables(RELEVANT_TABLES)
-    if boost_user_specific_by_table_semantics(query_embedding, user_tables):
-        scores["USER_SPECIFIC"] += 0.1
 
-    return max(scores, key=scores.get)
+query_classifier = QueryClassifier()
+
+async def classify_query(query: str, user_context: dict = None) -> Dict[str, any]:
+    return await query_classifier.classify(query, user_context)
 
 async def preload_model_and_cache(redis_client):
     global model, cache
@@ -142,4 +150,4 @@ async def preload_model_and_cache(redis_client):
         model = SentenceTransformer("all-MiniLM-L6-v2")
     if cache is None:
         cache = CachingService(redis_client)
-    print("Model and cache initialized")
+    print("Query classifier initialized")

@@ -1,6 +1,9 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\app",
+    "\\app\\services"
   ],
+  "SelectedNode": "\\start.py",
   "PreviewInSolutionExplorer": false
 }

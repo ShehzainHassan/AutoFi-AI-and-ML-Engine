@@ -1,39 +1,41 @@
 import logging
 import re
-from typing import Any, Dict, List
-from app.services.schema_provider import RELEVANT_TABLES
+from typing import Any, List, Dict
+import sqlparse
 
 logger = logging.getLogger(__name__)
 MAX_ROWS = 10
 
+RELEVANT_TABLES = {
+    "Vehicles": ["Id", "Make", "Model", "Year", "Price", "Mileage", "Color", "Transmission", "FuelType"],
+    "Auctions": ["AuctionId", "VehicleId", "StartUtc", "EndUtc", "StartingPrice", "CurrentPrice", "Status", "CreatedUtc", "UpdatedUtc", "ScheduledStartTime", "PreviewStartTime", "IsReserveMet"],
+    "Bids": ["BidId", "AuctionId", "UserId", "Amount", "IsAuto", "CreatedUtc"],
+    "AutoBids": ["Id","UserId", "AuctionId", "MaxBidAmount", "CurrentBidAmount", "IsActive", "BidStrategyType", "CreatedAt", "UpdatedAt", "ExecutedAt"],
+    "BidStrategies": ["AuctionId", "UserId", "Type", "BidDelaySeconds", "MaxBidsPerMinute", "MaxSpreadBids", "PreferredBidTiming", "CreatedAt", "UpdatedAt"],
+    "Users": ["Id", "Name", "Email", "CreatedUtc", "LastLoggedIn"],
+    "UserSavedSearches": ["UserId", "Search"],
+    "UserInteractions": ["Id", "UserId", "VehicleId", "InteractionType", "CreatedAt"],
+    "Watchlists": ["WatchlistId", "UserId", "AuctionId", "CreatedUtc"],
+    "VehicleFeatures": ["Make", "Model", "Drivetrain", "Engine", "FuelEconomy", "Performance", "Measurements", "Options"],
+}
+
 class QueryExecutor:
     def __init__(self, db_manager):
-        self.db_manager = db_manager  
+        self.db_manager = db_manager
 
-    def validate_user_scope(self, query: str, user_context: Dict[str, Any]) -> bool:
-        user_id = user_context.get("user_id")
-        user_name = user_context.get("name")
-        user_email = user_context.get("email")
+    def _is_safe_select(self, query: str) -> bool:
+        parsed = sqlparse.parse(query)
+        if not parsed:
+            return False
+        stmt = parsed[0]
+        return stmt.get_type() == "SELECT"
 
-        matches = re.findall(r'["]?UserId["]?\s*=\s*(\d+)', query, re.IGNORECASE)
-        for match in matches:
-            if user_id is None or int(match) != int(user_id):
-                logger.warning(f"Query rejected: UserId {match} does not match authenticated user {user_id}")
-                return False
-
-        matches = re.findall(r'["]?Name["]?\s*=\s*\'([^\']+)\'', query, re.IGNORECASE)
-        for match in matches:
-            if user_name is None or match.lower() != user_name.lower():
-                logger.warning(f"Query rejected: Name {match} does not match authenticated user {user_name}")
-                return False
-
-        matches = re.findall(r'["]?Email["]?\s*=\s*\'([^\']+)\'', query, re.IGNORECASE)
-        for match in matches:
-            if user_email is None or match.lower() != user_email.lower():
-                logger.warning(f"Query rejected: Email {match} does not match authenticated user {user_email}")
-                return False
-
-        return True
+    def _ensure_limit(self, query: str) -> str:
+        lowered = query.lower()
+        if "limit" not in lowered:
+            query = query.rstrip().rstrip(";")
+            query += f" LIMIT {MAX_ROWS}"
+        return query
 
     @staticmethod
     def enforce_schema(query: str) -> str:
@@ -53,61 +55,58 @@ class QueryExecutor:
                 )
         return query
 
+    def _check_user_filters(self, query: str, user_context: Dict[str, Any]) -> None:
+        """
+        Ensure that filters on Users.Id, Users.Name, Users.Email
+        match the current user_context. If not, raise exception.
+        """
+        if not user_context:
+            return  # nothing to check
+
+        user_id = str(user_context.get("user_id", "")).lower()
+        user_name = str(user_context.get("name", "")).lower()
+        user_email = str(user_context.get("email", "")).lower()
+
+        # Check for Users."Id"
+        match_id = re.search(r'"Users"\."Id"\s*=\s*(\d+)', query, flags=re.IGNORECASE)
+        if match_id:
+            val = match_id.group(1).lower()
+            if val != user_id:
+                raise ValueError("Unauthorized access: UserId filter does not match context")
+
+        # Check for Users."Name"
+        match_name = re.search(r'"Users"\."Name"\s*=\s*\'([^\']+)\'', query, flags=re.IGNORECASE)
+        if match_name:
+            val = match_name.group(1).lower()
+            if val != user_name:
+                raise ValueError("Unauthorized access: User Name filter does not match context")
+
+        # Check for Users."Email"
+        match_email = re.search(r'"Users"\."Email"\s*=\s*\'([^\']+)\'', query, flags=re.IGNORECASE)
+        if match_email:
+            val = match_email.group(1).lower()
+            if val != user_email:
+                raise ValueError("Unauthorized access: User Email filter does not match context")
+
     async def execute_safe_query(
-        self, query: str, params: Dict[str, Any] = {}, user_context: Dict[str, Any] = None
+        self, query: str, user_context: Dict[str, Any] = None
     ) -> List[Dict[str, Any]]:
-        query = query.replace("\n", " ").replace("\\n", " ").replace("\r", " ").strip()
-        query = re.sub(r'(\w+)\s*\n\s*(\w+)', r'\1\2', query)
-        if not self.validate_query(query):
-            logger.warning(f"Query blocked due to unsafe content: {query}")
-            return [{"error": "Unsafe query detected."}]
-        
-        if user_context and not self.validate_user_scope(query, user_context):
-            return [{"error": "Query contains invalid user filter."}]
-        
-        query = self.enforce_schema(query)
-
-        lowered = query.lower()
-        if "limit" not in lowered and "count(" not in lowered:
-            query = query.rstrip().rstrip(";") + f" LIMIT {MAX_ROWS}"
-
         try:
+            if not self._is_safe_select(query):
+                raise ValueError("Only SELECT queries are allowed")
+
+            safe_query = self.enforce_schema(query)
+            safe_query = self._ensure_limit(safe_query)
+
+            # Enforce user-specific access rules
+            self._check_user_filters(safe_query, user_context)
+
+            logger.debug(f"Executing query: {safe_query}")
+
             async with self.db_manager.get_connection() as conn:
-                result = await conn.fetch(query, *params.values())
-                return [dict(row) for row in result]
+                rows = await conn.fetch(safe_query)
+                return [dict(row) for row in rows]
+
         except Exception as e:
             logger.error(f"Query execution failed: {e}")
             return [{"error": "Database query execution failed."}]
-
-    def validate_query(self, query: str) -> bool:
-        stripped_query = query.strip()
-        lowered_query = stripped_query.lower()
-
-        if not lowered_query.startswith("select"):
-            return False
-
-        if ";" in stripped_query[:-1]:
-            logger.warning("Forbidden: multiple SQL statements detected")
-            return False
-
-        forbidden_keywords = [
-            "drop", "delete", "alter", "insert", "update",
-            "--", "exec", "truncate"
-        ]
-        for kw in forbidden_keywords:
-            if kw in lowered_query:
-                logger.warning(f"Forbidden keyword found: {kw}")
-                return False
-
-        tables_in_query = (
-            re.findall(r'\bfrom\s+"?(\w+)"?', stripped_query, re.IGNORECASE)
-            + re.findall(r'\bjoin\s+"?(\w+)"?', stripped_query, re.IGNORECASE)
-        )
-        tables_in_query = [t.strip('"') for t in tables_in_query]
-
-        for table in tables_in_query:
-            if table not in RELEVANT_TABLES:
-                logger.warning(f"Table not allowed: {table}")
-                return False
-
-        return True

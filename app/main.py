@@ -27,6 +27,8 @@ from app.utils.query_classifier import preload_model_and_cache
 from app.observability.metrics import attach_metrics
 from app.observability.tracing import setup_tracing
 from app.dependencies.ai_dependencies import check_ai_enabled
+from app.utils.query_classifier import classify_query
+
 APP_VERSION = "1.0.0"
 MAX_RETRIES = 5
 RETRY_DELAY = 2 
@@ -36,12 +38,6 @@ logger = logging.getLogger(__name__)
 
 db_manager = DatabaseManager()
 container: DependencyContainer | None = None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global container
-    start_time = time.time()
-    logger.info("Starting AutoFi Vehicle Recommendation API...")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,6 +69,7 @@ async def lifespan(app: FastAPI):
         )
         await retry_async(redis_client.ping, "Redis Ping")
         await preload_model_and_cache(redis_client)
+
         vehicle_repo = VehicleRepository(pool=pool, vehicle_limit=20000)
         user_repo = UserRepository(pool=pool)
 
