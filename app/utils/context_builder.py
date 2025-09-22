@@ -10,7 +10,7 @@ def format_context_for_prompt(context: Optional[dict]) -> str:
     parts = []
     dotnet_ctx = context.get("dotnet_context", {})
     ml_ctx = context.get("ml_context", {})
-
+    parts.append("User Context Summary: \n")
     # .NET Context Summary
     if dotnet_ctx:
         auction_history = dotnet_ctx.get("auction_history", [])
@@ -19,7 +19,6 @@ def format_context_for_prompt(context: Optional[dict]) -> str:
 
         won_count = sum(1 for a in auction_history if a.get("is_winner"))
         parts.append(
-            f".NET Context Summary:\n"
             f"- Auctions participated: {len(auction_history)}\n"
             f"- Auctions won: {won_count}\n"
             f"- Auto-bid configurations: {len(auto_bids)}\n"
@@ -39,7 +38,6 @@ def format_context_for_prompt(context: Optional[dict]) -> str:
         event_counts = Counter(e.get("EventType") for e in analytics_events)
 
         parts.append(
-            f"ML Context Summary:\n"
             f"- User ID: {user_id}\n"
             f"- Name: {user_name}\n"
             f"- Email: {user_email}\n"

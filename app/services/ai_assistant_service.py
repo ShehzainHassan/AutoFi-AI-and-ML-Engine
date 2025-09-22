@@ -32,13 +32,14 @@ class AIQueryService:
         # Single OpenAI call with unified prompt
         with tracer.start_as_current_span("unified_openai_call"):
             prompt = UNIFIED_PROMPT.format(**prompt_context)
+            print(prompt)
             raw_response = await self.openai_client.call_openai_with_retry(prompt)
             parsed = json.loads(raw_response)
             logger.debug(f"parsed = ", parsed)
             try:
                 # Validate required fields
-                if not self._validate_unified_response(parsed, query_type):
-                    return self._fallback_response(query_type)
+                # if not self._validate_unified_response(parsed, query_type):
+                #     return self._fallback_response(query_type)
                 
                 # Execute SQL if provided
                 sql_query = parsed.get("sql")
