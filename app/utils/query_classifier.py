@@ -7,9 +7,7 @@ from functools import lru_cache
 from app.services.caching_service import CachingService
 from rapidfuzz import fuzz
 
-FORBIDDEN_KEYWORDS = [
-    "drop", "delete", "alter", "insert", "update", "truncate", "--", "exec"
-]
+FORBIDDEN_KEYWORDS = ["drop", "delete", "alter", "insert", "update", "truncate", "--", "exec"]
 
 model: Optional[SentenceTransformer] = None
 cache: Optional[CachingService] = None
@@ -78,27 +76,22 @@ class QueryClassifier:
 
             q = query.lower()
 
-            # 1. Block obvious SQL injection keywords (fuzzy tolerance)
             for keyword in FORBIDDEN_KEYWORDS:
-                if fuzz.partial_ratio(keyword, q) > 85:  # allow typos like 'dropp' or 'deleet'
+                if fuzz.partial_ratio(keyword, q) > 85:
                     return True
 
-            # 2. Block "reserve price" queries (with typo tolerance)
             if fuzz.partial_ratio("reserve price", q) > 80:
                 return True
 
-            # 3. User-specific info checks
             if user_context:
                 user_id = str(user_context.get("user_id", "")).lower()
                 user_email = str(user_context.get("email", "")).lower()
                 user_name = str(user_context.get("name", "")).lower()
 
-                # Possible sensitive terms
                 sensitive_terms = ["user id", "userid", "user email", "email", "username", "user name"]
 
                 for term in sensitive_terms:
                     if fuzz.partial_ratio(term, q) > 80:
-                        # If user ID / email / name in query does not match logged-in user → UNSAFE
                         if user_id and user_id not in q \
                         and user_email and user_email not in q \
                         and user_name and user_name not in q:
@@ -143,11 +136,3 @@ query_classifier = QueryClassifier()
 
 async def classify_query(query: str, user_context: dict = None) -> Dict[str, any]:
     return await query_classifier.classify(query, user_context)
-
-async def preload_model_and_cache(redis_client):
-    global model, cache
-    if model is None:
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-    if cache is None:
-        cache = CachingService(redis_client)
-    print("Query classifier initialized")

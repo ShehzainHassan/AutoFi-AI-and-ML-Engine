@@ -207,7 +207,7 @@ class DatabaseEntityExtractor:
                 
                 # Add pricing if relevant
                 if pattern_scores.get("auction_queries", 0) > 0.4:
-                    essential_columns.update(["StartingPrice", "CurrentPrice", "ReservePrice", "IsReserveMet"])
+                    essential_columns.update(["StartingPrice", "CurrentPrice", "IsReserveMet"])
                 
                 # Add timing if time-related query
                 if any(word in query_lower for word in ["time", "when", "start", "end", "live", "active", "ended"]):
@@ -227,7 +227,6 @@ class DatabaseEntityExtractor:
             
             elif table_name == "VehicleFeatures":
                 essential_columns.update(["Make", "Model", "Drivetrain", "Engine", "FuelEconomy"])
-
                 if any(word in query_lower for word in ["performance", "hp", "horsepower", "torque"]):
                     essential_columns.add("Performance")
 

@@ -16,14 +16,15 @@ def format_context_for_prompt(context: Optional[dict]) -> str:
         auction_history = dotnet_ctx.get("auction_history", [])
         auto_bids = dotnet_ctx.get("auto_bid_settings", [])
         saved_searches = dotnet_ctx.get("saved_searches", [])
+        watchlists = dotnet_ctx.get("user_watchlist", [])
 
         won_count = sum(1 for a in auction_history if a.get("is_winner"))
         parts.append(
             f"- Auctions participated: {len(auction_history)}\n"
             f"- Auctions won: {won_count}\n"
             f"- Auto-bid configurations: {len(auto_bids)}\n"
-            f"- Saved searches: {len(saved_searches)}\n"
-            f"(Includes bidding history, auto-bid strategies, and personalized search preferences.)"
+            f"- Number of Saved searches: {len(saved_searches)}\n"
+            f"- Number of Auctions in Watchlists: {len(watchlists)}\n "
         )
 
     # ML Context Summary
@@ -43,7 +44,6 @@ def format_context_for_prompt(context: Optional[dict]) -> str:
             f"- Email: {user_email}\n"
             f"- Recent interactions: {len(interactions)} (by type: {', '.join(f'{k}: {v}' for k, v in interaction_counts.items())})\n"
             f"- Recent behavioral events: {len(analytics_events)} (by type: {', '.join(f'{k}: {v}' for k, v in event_counts.items())})\n"
-            f"(Reflects the user's latest engagement patterns for personalization.)"
         )
     return "\n".join(parts)
 
@@ -57,7 +57,7 @@ def build_optimized_context(query_type: str, user_query: str, user_id: int, cont
         "query_type": query_type,
         "user_id": user_id,
         "schema_context": get_targeted_database_schema(query_type, entities),
-        "user_context": format_context_for_prompt(context) if query_type == "USER_SPECIFIC" else ""
+        "user_context": format_context_for_prompt(context) if query_type == "USER_SPECIFIC" else "USER CONTEXT:\n No user context needed\n"
     }
     
     return context_parts
