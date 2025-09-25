@@ -57,7 +57,7 @@ def build_optimized_context(query_type: str, user_query: str, user_id: int, cont
         "query_type": query_type,
         "user_id": user_id,
         "schema_context": get_targeted_database_schema(query_type, entities),
-        "user_context": format_context_for_prompt(context) if query_type == "USER_SPECIFIC" else "USER CONTEXT:\n No user context needed\n"
+        "user_context": format_context_for_prompt(context) if query_type == "USER_SPECIFIC" else "USER CONTEXT: No user context needed\n"
     }
     
     return context_parts

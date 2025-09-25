@@ -1,7 +1,6 @@
 import time
 import logging
 import asyncio
-from typing import Union, Tuple
 from openai import AsyncOpenAI, OpenAIError, AuthenticationError
 from config.app_config import settings
 from prometheus_client import Counter, Histogram
@@ -21,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 class OpenAIClient:
     """
-    Async OpenAI client with concurrency limits, queuing, retries,
-    metrics, and performance monitoring. Streaming is always enabled.
+    Optimized async OpenAI client with concurrency limits, retries,
+    metrics, and minimal overhead for low latency.
     """
 
     def __init__(self, max_concurrent_requests: int = 5):
@@ -43,37 +42,32 @@ class OpenAIClient:
         max_tokens: int | None = None,
         temperature: float | None = None
     ) -> str:
-        delay = 1
         model_to_use = model or self.model
         max_tokens_to_use = max_tokens or self.max_tokens
         temperature_to_use = temperature if temperature is not None else self.temperature
+
+        delay = 0.5
 
         for attempt in range(1, max_attempts + 1):
             async with self.semaphore:
                 start_time = time.perf_counter()
                 try:
-                    logger.debug(
-                        f"[OpenAI] Attempt {attempt} | model={model_to_use} | "
-                        f"prompt_len={len(prompt)} | preview={prompt[:200]!r}"
-                    )
-
                     response_stream = await self.client.chat.completions.create(
                         model=model_to_use,
-                        messages=[
-                            {"role": "system", "content": "You are BoxAssistant, an AI assistant for AutoFi."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        timeout=self.timeout,
+                        messages=[{"role": "user", "content": prompt}],
                         temperature=temperature_to_use,
                         max_tokens=max_tokens_to_use,
-                        stream=True
+                        stream=True,
+                        timeout=self.timeout,
                     )
 
-                    content = ""
+                    chunks = []
                     async for chunk in response_stream:
                         delta = chunk.choices[0].delta
                         if delta and delta.content:
-                            content += delta.content
+                            chunks.append(delta.content)
+
+                    content = "".join(chunks)
 
                     latency = time.perf_counter() - start_time
                     OPENAI_LATENCY.observe(latency)
@@ -83,7 +77,7 @@ class OpenAIClient:
                 except AuthenticationError as e:
                     OPENAI_REQUESTS.labels(status="auth_error").inc()
                     logger.error(f"[OpenAI] Authentication failed: {e}")
-                    return "Invalid OpenAI API key. Please check your credentials"
+                    return "Invalid OpenAI API key."
 
                 except OpenAIError as e:
                     latency = time.perf_counter() - start_time
@@ -91,18 +85,11 @@ class OpenAIClient:
                     OPENAI_REQUESTS.labels(status="failure").inc()
 
                     logger.warning(
-                        f"[OpenAI] Attempt {attempt} failed. "
-                        f"Type={type(e).__name__} | Message={str(e)}"
+                        f"[OpenAI] Attempt {attempt} failed: {type(e).__name__} | {str(e)}"
                     )
-                    if hasattr(e, 'status_code'):
-                        logger.warning(f"[OpenAI] HTTP status: {e.status_code}")
-                    if hasattr(e, 'request_id'):
-                        logger.warning(f"[OpenAI] Request ID: {e.request_id}")
-                    if hasattr(e, 'response') and e.response is not None:
-                        logger.warning(f"[OpenAI] Response body: {e.response}")
 
                     if attempt == max_attempts:
                         return "Failed to generate AI response after multiple attempts."
 
                     await asyncio.sleep(delay)
-                    delay *= 2
+                    delay = min(delay * 2, 2)

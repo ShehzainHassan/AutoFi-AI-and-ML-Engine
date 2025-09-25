@@ -1,5 +1,5 @@
 import html
-import simplejson as json
+import orjson
 import re
 from typing import Optional, Union
 
@@ -22,11 +22,8 @@ class UIBlockBuilder:
         """Convert basic Markdown formatting to HTML tags."""
         if not text:
             return ""
-        # Bold: **text** -> <strong>text</strong>
         text = re.sub(r"\*\*(.*?)\*\*", r"<strong>\1</strong>", text)
-        # Italic: *text* -> <em>text</em>
         text = re.sub(r"\*(.*?)\*", r"<em>\1</em>", text)
-        # Optional: links [text](url) -> <a href="url">text</a>
         text = re.sub(r"\[(.*?)\]\((.*?)\)", r'<a href="\2">\1</a>', text)
         return text
 
@@ -92,7 +89,7 @@ class UIBlockBuilder:
             if chart_type not in ("bar", "line", "pie"):
                 chart_type = "bar"
 
-            chart_data_json = json.dumps(data, default=str)
+            chart_data_json = orjson.dumps(data, default=str)
             chart_data_attr = html.escape(chart_data_json)
 
             return (

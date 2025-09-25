@@ -45,7 +45,6 @@ async def get_ml_user_context(user_id: int, orchestrator: IAssistantOrchestrator
     context = await orchestrator.get_user_context(user_id)
     if not context:
         raise HTTPException(status_code=404, detail="User ML context not found")
-    print(context)
     return context
 
 @router.post("/feedback")

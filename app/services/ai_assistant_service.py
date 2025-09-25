@@ -1,5 +1,5 @@
 import logging
-import simplejson as json
+import orjson
 from fastapi.encoders import jsonable_encoder
 from opentelemetry import trace
 from app.services.query_executor import QueryExecutor
@@ -21,7 +21,6 @@ class AIQueryService:
 
     async def generate_response(self, user_query: str, user_id: int, context: dict = None) -> AIResponseModel:
         start_total = time.perf_counter()
-        
         start_classify = time.perf_counter()
         result = await classify_query(user_query)
         elapsed_classify = time.perf_counter() - start_classify
@@ -43,13 +42,12 @@ class AIQueryService:
         start_openai = time.perf_counter()
         with tracer.start_as_current_span("unified_openai_call"):
             prompt = UNIFIED_PROMPT.format(**prompt_context)
-            print(prompt)
             raw_response = await self.openai_client.call_openai_with_retry(prompt)
         elapsed_openai = time.perf_counter() - start_openai
         print(f"OpenAI call took {elapsed_openai:.4f}s")
         
         start_parse = time.perf_counter()
-        parsed = json.loads(raw_response)
+        parsed = orjson.loads(raw_response)
         elapsed_parse = time.perf_counter() - start_parse
         print(f"Parsing OpenAI response took {elapsed_parse:.4f}s")
         
@@ -79,12 +77,7 @@ class AIQueryService:
                 start_ui = time.perf_counter()
                 ui_type = UIType(parsed.get("ui_type", "TEXT").upper())
                 chart_type = parsed.get("chart_type") if ui_type == UIType.CHART else None
-                ui_block = UIBlockBuilder.build(
-                    ui_type.value,
-                    data or parsed.get("data_preview", {}),
-                    final_answer,
-                    chart_type=chart_type
-                )
+                ui_block = UIBlockBuilder.build(ui_type.value, data, final_answer, chart_type=chart_type)
                 elapsed_ui = time.perf_counter() - start_ui
                 print(f"UIBlockBuilder took {elapsed_ui:.4f}s")
 
@@ -102,14 +95,9 @@ class AIQueryService:
                 final_answer = parsed.get("answer", "")
                 ui_type = UIType(parsed.get("ui_type", "TEXT").upper())
                 chart_type = parsed.get("chart_type") if ui_type == UIType.CHART else None
-
+                data = parsed.get("data")
                 start_ui2 = time.perf_counter()
-                ui_block = UIBlockBuilder.build(
-                    ui_type.value,
-                    parsed.get("data_preview", {}),
-                    final_answer,
-                    chart_type=chart_type
-                )
+                ui_block = UIBlockBuilder.build(ui_type.value, data, final_answer, chart_type=chart_type)
                 elapsed_ui2 = time.perf_counter() - start_ui2
                 print(f"UIBlockBuilder (no SQL) took {elapsed_ui2:.4f}s")
 
@@ -117,7 +105,7 @@ class AIQueryService:
                     answer=final_answer,
                     ui_type=ui_type,
                     query_type=query_type,
-                    data=jsonable_encoder(parsed.get("data_preview", {})),
+                    data=data,
                     suggested_actions=parsed.get("suggested_actions", []),
                     sources=parsed.get("sources", []),
                     ui_block=ui_block,
@@ -139,7 +127,7 @@ class AIQueryService:
         if query_type in {"GENERAL", "FINANCE_CALC"}:
             return has_answer and has_ui_type and parsed.get("sql") is None
         else:
-            has_sql_or_data = parsed.get("sql") or parsed.get("data_preview")
+            has_sql_or_data = parsed.get("sql") or parsed.get("data")
             return has_answer and has_ui_type and has_sql_or_data
     
     def _fallback_response(self, query_type: str) -> AIResponseModel:

@@ -30,11 +30,11 @@ class DatabaseEntityExtractor:
             "Vehicles": {
                 "description": "vehicle information make model year price mileage color fuel transmission",
                 "columns": ["Id", "Vin", "Make", "Model", "Year", "Price", "Mileage", "Color", "FuelType", "Transmission", "Status"],
-                "relationships": ["has Auction", "has UserInteractions", "has Drivetrain", "has Engine", "has FuelEconomy"]
+                "relationships": ["has Auction", "has Drivetrain", "has Engine", "has FuelEconomy"]
             },
             "Auctions": {
                 "description": "auction bidding live active ended reserve price starting current",
-                "columns": ["AuctionId", "VehicleId", "StartUtc", "EndUtc", "StartingPrice", "CurrentPrice", "ReservePrice", "IsReserveMet", "Status", "ScheduledStartTime", "PreviewStartTime"],
+                "columns": ["AuctionId", "VehicleId", "StartUtc", "EndUtc", "StartingPrice", "CurrentPrice", "IsReserveMet", "Status", "ScheduledStartTime", "PreviewStartTime"],
                 "relationships": ["belongs to Vehicle", "has many Bids", "has many Watchlists", "has many AutoBids"]
             },
             "Bids": {
@@ -52,22 +52,12 @@ class DatabaseEntityExtractor:
                 "columns": [],
                 "relationships": []
             },
-            "UserInteractions": {
-                "description": "",
-                "columns": [],
-                "relationships": []
-            },
             "Watchlists": {
                 "description": "",
                 "columns": [],
                 "relationships": []
             },
             "UserSavedSearches": {
-                "description": "",
-                "columns": [],
-                "relationships": []
-            },
-            "AnalyticsEvents": {
                 "description": "",
                 "columns": [],
                 "relationships": []
@@ -90,7 +80,7 @@ class DatabaseEntityExtractor:
             "vehicle_search": {
                 "embedding": self.model.encode(["find cars vehicles SUV sedan truck Toyota Honda BMW price under over"]),
                 "primary_tables": ["Vehicles"],
-                "secondary_tables": ["Auctions", "UserInteractions", "VehicleFeatures"]
+                "secondary_tables": ["Auctions", "VehicleFeatures"]
             },
             "auction_queries": {
                 "embedding": self.model.encode(["auction bidding live active ended reserve current starting price"]),
@@ -100,7 +90,7 @@ class DatabaseEntityExtractor:
             "user_specific": {
                 "embedding": self.model.encode(["my mine I me user account history saved viewed purchased owned my recent interactions my activity history things I clicked on"]),                
                 "primary_tables": ["Users"],
-                "secondary_tables": ["UserInteractions", "Bids", "Watchlists", "UserSavedSearches"]
+                "secondary_tables": ["Bids", "Watchlists", "UserSavedSearches"]
             },
             "bidding_activity": {
                 "embedding": self.model.encode(["bid bidding placed won lost maximum automatic manual strategy"]),

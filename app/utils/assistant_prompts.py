@@ -7,7 +7,6 @@ QUERY TYPE: {query_type}
 - ALWAYS return valid JSON only
 - For database queries: Generate SQL AND provide human summary in one response
 - Human summary must be a **generic summary** (do not hallucinate or assume specific vehicles/auctions).
-- Example: Instead of "Toyota Camry is available", say "Yes, there are vehicles available matching your criteria."
 - Vehicle references: Always include Make, Model, Year
 - Auction references: Always include Vehicle Make, Model, Year
 
@@ -34,7 +33,7 @@ QUERY TYPE: {query_type}
   "chart_type": "bar | line | pie" (required if ui_type = CHART),
   "suggested_actions": ["Follow-up question 1", "Follow-up question 2"],
   "sources": [] or ["url1", "url2"],
-  "data_preview": {{"key": "Expected data structure for UI rendering"}}
+  "data": []
 }}
 
 ## Query Classification Logic:

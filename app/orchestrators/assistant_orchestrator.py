@@ -1,4 +1,4 @@
-import logging
+import logging, time
 from typing import Dict, List, Optional
 from app.services.ai_assistant_service import AIQueryService
 from app.services.user_context_service import MLUserContextService
@@ -24,18 +24,24 @@ class AssistantOrchestrator:
         self.db_manager = db_manager
 
     async def handle_query(self, user_id: int, question: str, context: Dict) -> AIResponseModel:
+        start_ml_context = time.perf_counter()
         ml_context = await self.ml_service.get_ml_context(user_id)
+        elapsed_ml_context = time.perf_counter() - start_ml_context
+        print(f"get_ml_context took {elapsed_ml_context:.4f}s")
 
         combined_context = {
             "dotnet_context": context or {},
             "ml_context": ml_context or {},
         }
 
+        start_generate_response = time.perf_counter()
         response = await self.ai_service.generate_response(
             user_query=question,
             user_id=user_id,
             context=combined_context,
         )
+        elapsed_generate_response = time.perf_counter() - start_generate_response
+        print(f"generate_response took {elapsed_generate_response:.4f}s")
 
         logger.info(f"AI Response generated for user={user_id}, question='{question}'")
         return response
