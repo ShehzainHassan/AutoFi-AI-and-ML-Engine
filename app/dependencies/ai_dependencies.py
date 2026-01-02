@@ -9,23 +9,47 @@ def get_ml_service(request: Request) -> MLUserContextService:
     """
     Dependency provider for MLUserContextService using the app's DependencyContainer.
     """
-    return request.app.state.container.get(MLUserContextService)
+    container = getattr(request.app.state, 'container', None)
+    if container is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is initializing. Please try again in a moment."
+        )
+    return container.get(MLUserContextService)
 
 def get_feedback_service(request: Request) -> FeedbackService:
     """
     Dependency provider for FeedbackService using the app's DependencyContainer.
     """
-    return request.app.state.container.get(FeedbackService)
+    container = getattr(request.app.state, 'container', None)
+    if container is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is initializing. Please try again in a moment."
+        )
+    return container.get(FeedbackService)
 
 def get_ai_service(request: Request) -> AIQueryService:
     """
     Dependency provider for AIQueryService using the app's DependencyContainer.
     """
-    return request.app.state.container.get(AIQueryService)
+    container = getattr(request.app.state, 'container', None)
+    if container is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is initializing. Please try again in a moment."
+        )
+    return container.get(AIQueryService)
 
 
 def get_assistant_orchestrator(request: Request) -> IAssistantOrchestrator:
-    return request.app.state.container.get(IAssistantOrchestrator)
+    container = getattr(request.app.state, 'container', None)
+    if container is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is initializing. Please try again in a moment."
+        )
+    return container.get(IAssistantOrchestrator)
 
 def check_ai_enabled():
     if not settings.AI_ENABLED:

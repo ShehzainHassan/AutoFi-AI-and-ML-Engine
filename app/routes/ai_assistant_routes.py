@@ -31,7 +31,9 @@ async def ai_query(
 
     try:
         response = await orchestrator.handle_query(user_id=payload.query.user_id, question=payload.query.question, context=payload.context)
-        background_tasks.add_task(orchestrator.save_popular_query, payload.query.question, request.app.state.container.db_manager)
+        container = getattr(request.app.state, 'container', None)
+        if container and hasattr(container, 'db_manager'):
+            background_tasks.add_task(orchestrator.save_popular_query, payload.query.question, container.db_manager)
         return response
     except UserNotFoundError as e:
         logger.warning(f"User not found: {e.message}")

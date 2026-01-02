@@ -11,20 +11,21 @@ async def health(request: Request):
     """
     Health check for database, ML service, and orchestrator readiness
     """
-    db_manager: DatabaseManager = request.app.state.container.db_manager if request.app.state.container else None
+    container = getattr(request.app.state, 'container', None)
+    db_manager: DatabaseManager = container.db_manager if container else None
 
     orchestrator_ready = False
     ml_ready = False
 
-    if request.app.state.container:
+    if container:
         try:
-            orchestrator_ready = request.app.state.container.orchestrator is not None
+            orchestrator_ready = container.orchestrator is not None
         except Exception:
             pass
 
         try:
-            ml_service = getattr(request.app.state.container, "ml_service", None)
-            ml_ready = getattr(ml_service, "models_loaded", False)
+            ml_service = getattr(container, "ml_service", None)
+            ml_ready = getattr(ml_service, "models_loaded", False) if ml_service else False
         except Exception:
             pass
 
@@ -33,4 +34,5 @@ async def health(request: Request):
         "ml_models_loaded": ml_ready,
         "orchestrator_ready": orchestrator_ready,
         "version": request.app.version,
+        "status": "ready" if container else "initializing"
     }

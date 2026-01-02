@@ -19,7 +19,21 @@ router = APIRouter()
 auth_service = AuthService(jwt_secret=settings.JWT_SECRET, jwt_algorithm=settings.JWT_ALGORITHM)
 
 def get_orchestrator(request: Request) -> IRecommendationOrchestrator:
-    return request.app.state.container.orchestrator
+    """Get orchestrator from app state, with proper error handling."""
+    container = getattr(request.app.state, 'container', None)
+    if container is None:
+        logger.error("Container not initialized - application may still be starting up")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service is initializing. Please try again in a moment."
+        )
+    if not hasattr(container, 'orchestrator') or container.orchestrator is None:
+        logger.error("Orchestrator not available in container")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Recommendation service is not ready"
+        )
+    return container.orchestrator
 
 
 @router.get("/user/{user_id}", response_model=RecommendationResponse)

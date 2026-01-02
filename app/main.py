@@ -137,6 +137,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.exception(f"❌ Failed to initialize recommendation system: {e}")
         logger.warning("API will run but recommendations may not work")
+        # Set container to None so routes can handle it gracefully
+        app.state.container = None
         yield
 
     finally:
