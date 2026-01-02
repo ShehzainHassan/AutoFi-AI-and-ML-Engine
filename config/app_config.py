@@ -1,6 +1,7 @@
-from typing import Annotated
-from pydantic import Field, PositiveInt, StringConstraints
+from typing import Optional
+from pydantic import Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import secrets
 
 
 class Settings(BaseSettings):
@@ -10,30 +11,32 @@ class Settings(BaseSettings):
     DB_POOL_MAX: PositiveInt = Field(default=20, ge=1)
 
     # Redis
-    REDIS_HOST: str
-    REDIS_DB: int = Field(ge=0)
+    REDIS_HOST: str = Field(default="localhost")
+    REDIS_PORT: int = Field(default=6379, gt=0, le=65535)
+    REDIS_DB: int = Field(default=0, ge=0)
 
-    # Auth
-    JWT_SECRET: Annotated[str, StringConstraints(min_length=32)]
-    JWT_ALGORITHM: str
-    JWT_AUDIENCE: str
+    # Auth (optional - defaults provided for Railway deployment)
+    JWT_SECRET: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    JWT_ALGORITHM: str = Field(default="HS256")
+    JWT_AUDIENCE: str = Field(default="AutoFiClient")
 
-    # OpenAI
-    OPENAI_API_KEY: str
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    # OpenAI (optional if AI_ENABLED is False)
+    OPENAI_API_KEY: Optional[str] = Field(default=None)
+    OPENAI_MODEL: str = Field(default="gpt-4o-mini")
     OPENAI_MAX_TOKENS: int = Field(default=5000, gt=0)
     OPENAI_TIMEOUT: float = Field(default=30.0, gt=0)
     OPENAI_TEMPERATURE: float = Field(default=0.2, gt=0)
-    AI_ENABLED: bool = True
+    AI_ENABLED: bool = Field(default=True)
 
     # ML Model
-    MODEL_PATH: str
-    MAX_RECOMMENDATIONS: PositiveInt = 10
+    MODEL_PATH: str = Field(default="trained_models")
+    MAX_RECOMMENDATIONS: PositiveInt = Field(default=10)
 
     # Server
-    ENVIRONMENT: str
-    HOST: str = "0.0.0.0"
+    ENVIRONMENT: str = Field(default="production")
+    HOST: str = Field(default="0.0.0.0")
     PORT: int = Field(default=8000, gt=0, le=65535)
+    
 
     # Config
     model_config = SettingsConfigDict(
